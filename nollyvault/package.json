@@ -1,0 +1,24 @@
+{
+  "name": "naijaRewind",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "next lint"
+  },
+  "dependencies": {
+    "@supabase/ssr": "^0.5.0",
+    "@supabase/supabase-js": "^2.43.0",
+    "next": "^15.3.0",
+    "react": "^18",
+    "react-dom": "^18",
+    "stripe": "^14.0.0",
+    "vercel": "^54.11.1"
+  },
+  "devDependencies": {
+    "eslint": "^9",
+    "eslint-config-next": "^15.3.0"
+  }
+}
