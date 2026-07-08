@@ -68,6 +68,14 @@ alter table public.brand_sponsors enable row level security;
 -- pages/api/advertise.js. RLS on + zero policies locks the anon key
 -- (public, shipped to every browser) out of brand contact info entirely.
 
+alter table public.retro_ads enable row level security;
+alter table public.preroll_slots enable row level security;
+-- Locked too, even though nothing queries these yet — the pre-roll feature
+-- these power hasn't been built. Leaving a table open "until something needs
+-- protecting" means anyone with the public anon key can write to it in the
+-- meantime, and preroll_slots controls what ad sequence plays before every
+-- film — not worth the risk of forgetting to come back to this later.
+
 -- ─── AD VIEW TRACKING ────────────────────────────────────────────────────────
 create table if not exists public.ad_views (
   id uuid default uuid_generate_v4() primary key,
