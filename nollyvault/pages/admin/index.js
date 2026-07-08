@@ -45,6 +45,29 @@ export default function AdminDashboard() {
   const [tab, setTab] = useState('overview')
   const [toast, setToast] = useState(null)
 
+  // Access gate. In demo mode (no Supabase env vars set yet) there's no real
+  // auth to check against, so the dashboard stays open for local preview —
+  // exactly how it's worked so far. Once Supabase is connected, this page
+  // re-validates against the server (same ADMIN_EMAILS check the admin API
+  // routes already use) and bounces anyone who isn't an admin, instead of
+  // relying on the nav link simply being hidden.
+  const [access, setAccess] = useState(supabase ? 'checking' : 'open')
+
+  useEffect(() => {
+    if (!supabase) { setAccess('open'); return }
+    if (!session) { setAccess('denied'); return }
+    let cancelled = false
+    fetch('/api/admin/whoami')
+      .then(r => r.ok ? r.json() : { isAdmin: false })
+      .then(({ isAdmin }) => { if (!cancelled) setAccess(isAdmin ? 'open' : 'denied') })
+      .catch(() => { if (!cancelled) setAccess('denied') })
+    return () => { cancelled = true }
+  }, [supabase, session])
+
+  useEffect(() => {
+    if (access === 'denied') router.replace('/browse')
+  }, [access, router])
+
   const showToast = (msg, type='') => {
     setToast({msg,type})
     setTimeout(()=>setToast(null), 3000)
@@ -80,6 +103,21 @@ export default function AdminDashboard() {
     const data = await res.json()
     if (data.success) showToast(`Legacy Fund credited ₦${data.fund_credited_ngn?.toLocaleString()} for ${data.actors_allocated} actors`,'gold')
     else showToast(data.message||data.error,'gold')
+  }
+
+  if (access === 'checking') {
+    return (
+      <div style={{minHeight:'100vh',background:'#080808',display:'flex',alignItems:'center',justifyContent:'center',color:'#9a9590',fontFamily:'DM Sans, sans-serif'}}>
+        Checking access…
+      </div>
+    )
+  }
+  if (access === 'denied') {
+    return (
+      <div style={{minHeight:'100vh',background:'#080808',display:'flex',alignItems:'center',justifyContent:'center',color:'#9a9590',fontFamily:'DM Sans, sans-serif'}}>
+        Redirecting…
+      </div>
+    )
   }
 
   return (

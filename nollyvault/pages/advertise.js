@@ -115,6 +115,7 @@ export default function Advertise() {
           </span>
         </Link>
         <div style={{ flex:1 }} />
+        <Link href="/partners"><button className="btn btn-outline" style={{ fontSize:13, padding:'7px 16px', marginRight:8 }}>Producers/Rights Holders →</button></Link>
         <Link href="/browse"><button className="btn btn-outline" style={{ fontSize:13, padding:'7px 16px' }}>← Back to App</button></Link>
       </nav>
 

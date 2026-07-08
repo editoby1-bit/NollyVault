@@ -182,3 +182,16 @@ select
   (select count(*) from public.veteran_actors where is_verified=true) as verified_actors,
   (select count(*) from public.veteran_actors) as registered_actors,
   (select count(*) from public.movies where is_active=true) as active_films;
+
+-- ─── ROW LEVEL SECURITY ───────────────────────────────────────────────────────
+-- Veteran actor personal/payout info and fund ledgers are only ever queried
+-- via the service-role key in pages/api/admin/legacy-fund/*. The /veterans
+-- page fetches its public stats through /api/admin/legacy-fund/stats (server
+-- route), not a direct client query, so locking these fully doesn't break
+-- anything currently displayed.
+alter table public.veteran_actors enable row level security;
+alter table public.movie_legacy_points enable row level security;
+alter table public.legacy_fund_ledger enable row level security;
+alter table public.actor_legacy_allocations enable row level security;
+alter table public.impact_stats enable row level security;
+alter table public.governance_board enable row level security;

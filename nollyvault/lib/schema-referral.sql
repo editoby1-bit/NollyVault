@@ -43,9 +43,9 @@ create table if not exists public.referral_earnings (
 );
 
 -- Index for fast lookups
-create index if not exists on public.referrals (referral_code);
-create index if not exists on public.referrals (veteran_actor_id);
-create index if not exists on public.referral_earnings (period, veteran_actor_id);
+create index if not exists idx_referrals_code on public.referrals (referral_code);
+create index if not exists idx_referrals_veteran_actor on public.referrals (veteran_actor_id);
+create index if not exists idx_referral_earnings_period_actor on public.referral_earnings (period, veteran_actor_id);
 
 -- Add referral_code column to users table (captured at signup)
 alter table public.users add column if not exists referred_by_code text default null;
@@ -54,3 +54,11 @@ alter table public.users add column if not exists referred_by_actor_id uuid defa
 -- Add watch limit to users (for Classic plan enforcement)
 alter table public.users add column if not exists monthly_watch_minutes integer default 0;
 alter table public.users add column if not exists watch_limit_reset_at timestamptz default now();
+
+-- ─── ROW LEVEL SECURITY ───────────────────────────────────────────────────────
+-- Referral codes and earnings are financial data tied to real people, only
+-- ever written/read via the service-role key in pages/api/referral/* and
+-- pages/api/admin/referral/calculate.js.
+alter table public.actor_referral_codes enable row level security;
+alter table public.referrals enable row level security;
+alter table public.referral_earnings enable row level security;

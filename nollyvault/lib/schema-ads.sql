@@ -87,6 +87,17 @@ insert into public.retro_content (title, type, brand, year, youtube_video_id, de
 on conflict do nothing;
 
 -- Indexes
-create index if not exists on public.ads (type, is_active);
-create index if not exists on public.retro_content (type, is_active);
-create index if not exists on public.ad_reel_items (reel_id, position);
+create index if not exists idx_ads_type_active on public.ads (type, is_active);
+create index if not exists idx_retro_content_type_active on public.retro_content (type, is_active);
+create index if not exists idx_ad_reel_items_reel_position on public.ad_reel_items (reel_id, position);
+
+-- ─── ROW LEVEL SECURITY ───────────────────────────────────────────────────────
+-- All ad content/campaign tables are only ever queried via the service-role
+-- key in pages/api/ads/reel.js and pages/api/ads/retro.js. No client-side
+-- direct reads exist for these. RLS on + zero policies locks the public
+-- anon key out entirely without affecting how the app actually works.
+alter table public.ads enable row level security;
+alter table public.ad_campaigns enable row level security;
+alter table public.ad_reels enable row level security;
+alter table public.ad_reel_items enable row level security;
+alter table public.retro_content enable row level security;

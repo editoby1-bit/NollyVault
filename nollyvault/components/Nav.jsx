@@ -11,6 +11,7 @@ export default function Nav({ activeProfile, onProfileClick, onSearch }) {
   const [query, setQuery] = useState('')
   const [scrolled, setScrolled] = useState(false)
   const [menuOpen, setMenuOpen] = useState(false)
+  const [isAdmin, setIsAdmin] = useState(false)
 
   useEffect(() => {
     const handler = () => setScrolled(window.scrollY > 40)
@@ -18,20 +19,38 @@ export default function Nav({ activeProfile, onProfileClick, onSearch }) {
     return () => window.removeEventListener('scroll', handler)
   }, [])
 
+  // Only show the ADMIN link to people who actually pass the server-side admin check.
+  // Never trust a client-only flag for this — this call re-validates against
+  // ADMIN_EMAILS on the server every time the session changes.
+  useEffect(() => {
+    let cancelled = false
+    if (!session) { setIsAdmin(false); return }
+    fetch('/api/admin/whoami')
+      .then(r => r.ok ? r.json() : { isAdmin: false })
+      .then(data => { if (!cancelled) setIsAdmin(!!data.isAdmin) })
+      .catch(() => { if (!cancelled) setIsAdmin(false) })
+    return () => { cancelled = true }
+  }, [session])
+
   const handleSearch = (e) => {
     const val = e.target.value
     setQuery(val)
     onSearch?.(val)
   }
 
+  // 'Movies' used to point at /movies, a page that was never built (404 on click).
+  // Home (/browse) already covers full catalog browsing, so it's removed rather
+  // than duplicated. 'Advertise' is added here since it previously had no working
+  // entry point anywhere in the main nav.
   const navLinks = [
     { label: 'Home',          href: '/browse' },
-    { label: 'Movies',        href: '/movies' },
     { label: 'Categories',    href: '/categories' },
     { label: 'Watchlist',     href: '/watchlist' },
     { label: 'Watch Parties', href: '/watch-party' },
     { label: '🎬 The Legends', href: '/veterans', gold: true },
     { label: '📺 Retro Ads', href: '/retro-ads', gold: false },
+    { label: 'Advertise',     href: '/advertise' },
+    { label: 'Partners',      href: '/partners' },
   ]
 
   return (
@@ -105,12 +124,14 @@ export default function Nav({ activeProfile, onProfileClick, onSearch }) {
           </div>
         )}
 
-        {/* Admin link */}
-        <Link href="/admin">
-          <span style={{fontSize:11,color:'var(--gold,#c8a84b)',fontWeight:600,background:'rgba(200,168,75,0.1)',padding:'3px 9px',borderRadius:4,border:'1px solid var(--gold-dim,#7a6530)',cursor:'pointer'}}>
-            ADMIN
-          </span>
-        </Link>
+        {/* Admin link — only rendered for verified admins, see whoami check above */}
+        {isAdmin && (
+          <Link href="/admin">
+            <span style={{fontSize:11,color:'var(--gold,#c8a84b)',fontWeight:600,background:'rgba(200,168,75,0.1)',padding:'3px 9px',borderRadius:4,border:'1px solid var(--gold-dim,#7a6530)',cursor:'pointer'}}>
+              ADMIN
+            </span>
+          </Link>
+        )}
 
         {/* Mobile hamburger */}
         <button className="mobile-menu" onClick={()=>setMenuOpen(!menuOpen)}

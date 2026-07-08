@@ -477,8 +477,24 @@ export default function Landing() {
             <div style={{fontSize:11,color:'var(--text3)',fontFamily:'DM Sans',fontWeight:400,marginTop:3}}>The Home of Classic Nollywood</div>
           </div>
           <div style={{display:'flex',gap:24,fontSize:13,color:'var(--text3)',flexWrap:'wrap'}}>
-            {['About','Pricing','Advertise','Retro Ads','Contact','Terms','Privacy'].map(l=>(
-              <span key={l} style={{cursor:'pointer'}}>{l}</span>
+            {/* Pricing, Advertise, and Retro Ads have real pages, so they're
+                genuine links now instead of decorative spans. About, Contact,
+                Terms, and Privacy don't have pages yet — flagged, not faked. */}
+            {[
+              { label: 'About' },
+              { label: 'Pricing',   href: '/pricing' },
+              { label: 'Advertise', href: '/advertise' },
+              { label: 'Partners',  href: '/partners' },
+              { label: 'Retro Ads', href: '/retro-ads' },
+              { label: 'Contact' },
+              { label: 'Terms' },
+              { label: 'Privacy' },
+            ].map(l => l.href ? (
+              <Link key={l.label} href={l.href}>
+                <span style={{cursor:'pointer'}}>{l.label}</span>
+              </Link>
+            ) : (
+              <span key={l.label} style={{cursor:'default',opacity:0.5}} title="Page not built yet">{l.label}</span>
             ))}
           </div>
           <div style={{fontSize:12,color:'var(--text3)'}}>© {new Date().getFullYear()} NaijaRewind. All rights reserved.</div>

@@ -137,6 +137,22 @@ create table public.producers (
 -- Link movies to producers for dashboard
 alter table public.movies add column producer_id uuid references public.producers(id);
 
+-- Inbound licensing enquiries from the public /partners page, before a producer
+-- is verified and onboarded into the `producers` table above. Kept separate
+-- since this form has no banking details — just contact + catalog info.
+create table public.producer_submissions (
+  id uuid default uuid_generate_v4() primary key,
+  producer_or_rights_holder_name text not null,
+  contact_name text,
+  contact_email text not null,
+  contact_phone text,
+  films text,               -- free text list of titles they hold rights to
+  proof_of_rights text,     -- description of what they can provide (contract, CAC cert, etc.)
+  message text,
+  status text check (status in ('new','contacted','verifying','onboarded','declined')) default 'new',
+  created_at timestamptz default now()
+);
+
 -- ─── ROW LEVEL SECURITY ───────────────────────────────────────────────────────
 -- Users can only read/write their own data.
 
@@ -145,6 +161,21 @@ alter table public.profiles enable row level security;
 alter table public.watch_history enable row level security;
 alter table public.watchlists enable row level security;
 alter table public.watch_parties enable row level security;
+alter table public.movies enable row level security;
+-- ^ CRITICAL: the "movies_read" policy below was previously inert without
+-- this line — RLS was never turned on for movies, meaning the public anon
+-- key had full insert/update/delete access to the catalog with no policy
+-- restricting it at all, not just open reads.
+
+-- Lock down everything else that's only ever touched via the service-role
+-- key in admin/API routes — no policies needed since service-role bypasses
+-- RLS regardless, this just closes the anon key out entirely.
+alter table public.movie_actors enable row level security;
+alter table public.watch_party_members enable row level security;
+alter table public.play_events enable row level security;
+alter table public.royalty_distributions enable row level security;
+alter table public.producers enable row level security;
+alter table public.producer_submissions enable row level security;
 
 -- Users: own row only
 create policy "users_own" on public.users

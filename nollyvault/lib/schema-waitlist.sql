@@ -10,3 +10,8 @@ create table if not exists public.waitlist (
 );
 
 -- No RLS needed — this is insert-only from API with service role key
+
+-- ─── ROW LEVEL SECURITY ───────────────────────────────────────────────────────
+-- Waitlist emails, only ever written via the service-role key in
+-- pages/api/waitlist.js.
+alter table public.waitlist enable row level security;

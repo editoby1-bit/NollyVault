@@ -63,6 +63,11 @@ create table if not exists public.brand_sponsors (
   created_at timestamptz default now()
 );
 
+alter table public.brand_sponsors enable row level security;
+-- No policies added — only written to via the service-role key in
+-- pages/api/advertise.js. RLS on + zero policies locks the anon key
+-- (public, shipped to every browser) out of brand contact info entirely.
+
 -- ─── AD VIEW TRACKING ────────────────────────────────────────────────────────
 create table if not exists public.ad_views (
   id uuid default uuid_generate_v4() primary key,
@@ -74,12 +79,18 @@ create table if not exists public.ad_views (
   period text                                  -- '2024-06' for monthly reporting
 );
 
+alter table public.ad_views enable row level security;
+-- No policies added — ties a user_id to their viewing behavior, which is
+-- private. Not queried from the client anywhere yet; will go through the
+-- service-role key when the pre-roll tracking API route is built, same
+-- pattern as brand_sponsors above.
+
 -- ─── INDEXES ──────────────────────────────────────────────────────────────────
-create index if not exists on public.retro_ads (ad_type, is_active);
-create index if not exists on public.retro_ads (is_preroll, is_active);
-create index if not exists on public.preroll_slots (slot_order, active_from);
-create index if not exists on public.ad_views (period, ad_id);
-create index if not exists on public.brand_sponsors (is_active);
+create index if not exists idx_retro_ads_type_active on public.retro_ads (ad_type, is_active);
+create index if not exists idx_retro_ads_preroll_active on public.retro_ads (is_preroll, is_active);
+create index if not exists idx_preroll_slots_order_active on public.preroll_slots (slot_order, active_from);
+create index if not exists idx_ad_views_period_ad on public.ad_views (period, ad_id);
+create index if not exists idx_brand_sponsors_active on public.brand_sponsors (is_active);
 
 -- ─── SEED DEFAULT PRE-ROLL SLOT ORDER ─────────────────────────────────────
 -- The VHS-era pre-film experience:

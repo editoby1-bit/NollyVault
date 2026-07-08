@@ -5,7 +5,7 @@ export const PLANS = {
     name: 'Classic',
     priceNGN: 150000,  // charged at ₦1,500 (shown as ₦2,500 slashed)      // Paystack uses kobo (1/100 of naira)
     priceUSD: 499,         // Stripe uses cents
-    nairaDisplay: '₦1,500'  // discounted from ₦2,500,
+    nairaDisplay: '₦1,500',  // discounted from ₦2,500
     usdDisplay: '$4.99',
     paystackPlanCode: 'PLN_classic_monthly', // set after creating in Paystack dashboard
     stripePriceId: 'price_classic_monthly',  // set after creating in Stripe dashboard
@@ -17,7 +17,7 @@ export const PLANS = {
     name: 'Premium',
     priceNGN: 300000,  // charged at ₦3,000 (shown as ₦3,500 slashed)
     priceUSD: 999,
-    nairaDisplay: '₦3,000'  // discounted from ₦3,500,
+    nairaDisplay: '₦3,000',  // discounted from ₦3,500
     usdDisplay: '$9.99',
     paystackPlanCode: 'PLN_premium_monthly',
     stripePriceId: 'price_premium_monthly',
