@@ -6,7 +6,7 @@ const TIERS = [
   {
     key: 'classic',
     name: 'Classic',
-    originalNGN: '₦2,500', priceNGN: '₦1,500', priceUSD: '$4.99',
+    originalNGN: '₦2,500', priceNGN: '₦1,500',
     color: '#c8a84b',
     watchLimit: '20 hrs/month',
     features: [
@@ -24,7 +24,7 @@ const TIERS = [
   {
     key: 'premium',
     name: 'Premium',
-    originalNGN: '₦3,500', priceNGN: '₦3,000', priceUSD: '$9.99',
+    originalNGN: '₦3,500', priceNGN: '₦3,000',
     color: '#e8e8e8', popular: true,
     features: [
       { t: 'Full classic Nollywood catalog', ok: true },
@@ -40,7 +40,7 @@ const TIERS = [
   {
     key: 'family',
     name: 'Family & Friends',
-    originalNGN: null, priceNGN: '₦5,000', priceUSD: '$14.99',
+    originalNGN: null, priceNGN: '₦5,000',
     color: '#7b68ee',
     features: [
       { t: 'Full classic Nollywood catalog', ok: true },
@@ -58,17 +58,15 @@ const TIERS = [
 export default function Pricing() {
   const session = useSession()
   const router = useRouter()
-  const [currency, setCurrency] = useState('NGN')
   const [loading, setLoading] = useState('')
 
   const handleSubscribe = async (tierKey) => {
     if (!session) { router.push('/signup'); return }
     setLoading(tierKey)
     try {
-      const endpoint = currency === 'NGN'
-        ? '/api/payments/paystack/initialize'
-        : '/api/payments/stripe/checkout'
-      const res = await fetch(endpoint, {
+      // Paystack only — accepts international cards, so this covers diaspora
+      // subscribers too. See lib/payments.js for why Stripe was removed.
+      const res = await fetch('/api/payments/paystack/initialize', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email: session.user.email, planKey: tierKey }),
       })
@@ -109,14 +107,6 @@ export default function Pricing() {
             <p style={{color:'var(--green)',fontSize:13,fontWeight:500,marginBottom:24}}>
               🎉 Launch pricing — limited time
             </p>
-            {/* Currency toggle */}
-            <div style={{display:'inline-flex',background:'var(--bg2)',border:'1px solid var(--bg4)',borderRadius:8,overflow:'hidden'}}>
-              {['NGN','USD'].map(c=>(
-                <button key={c} onClick={()=>setCurrency(c)} style={{padding:'8px 22px',border:'none',cursor:'pointer',background:currency===c?'var(--gold)':'transparent',color:currency===c?'#000':'var(--text2)',fontSize:13,fontWeight:600,transition:'.2s',fontFamily:'inherit'}}>
-                  {c==='NGN'?'🇳🇬 Naira':'🌍 USD (Diaspora)'}
-                </button>
-              ))}
-            </div>
           </div>
 
           {/* Tiers */}
@@ -131,18 +121,18 @@ export default function Pricing() {
 
                 {/* Price with slash */}
                 <div style={{marginBottom:4,display:'flex',alignItems:'baseline',flexWrap:'wrap',gap:4}}>
-                  {tier.originalNGN && currency==='NGN' && (
+                  {tier.originalNGN && (
                     <span className="slash">{tier.originalNGN}</span>
                   )}
                   <span style={{fontFamily:"'Playfair Display',serif",fontSize:38,fontWeight:900,color:tier.color}}>
-                    {currency==='NGN'?tier.priceNGN:tier.priceUSD}
+                    {tier.priceNGN}
                   </span>
-                  {tier.originalNGN && currency==='NGN' && (
+                  {tier.originalNGN && (
                     <span className="discount-badge">Launch price</span>
                   )}
                 </div>
                 <div style={{fontSize:12,color:'var(--text3)',marginBottom:tier.watchLimit?4:24}}>per month</div>
-                {tier.watchLimit && currency==='NGN' && tier.key==='classic' && (
+                {tier.watchLimit && tier.key==='classic' && (
                   <div style={{fontSize:12,color:'var(--gold)',marginBottom:20,fontWeight:500}}>⏱ {tier.watchLimit}</div>
                 )}
 
@@ -167,9 +157,7 @@ export default function Pricing() {
 
           {/* Trust */}
           <div style={{textAlign:'center',fontSize:13,color:'var(--text3)',marginBottom:12}}>
-            {currency==='NGN'
-              ?'Pay securely with Paystack · Cards, bank transfer & USSD accepted'
-              :'Pay securely with Stripe · All major cards accepted worldwide'}
+            Pay securely with Paystack · Cards, bank transfer & USSD · International cards accepted
           </div>
           <div style={{textAlign:'center',fontSize:12,color:'var(--text3)'}}>
             💚 5% of every referral subscription goes directly to the actor who referred you

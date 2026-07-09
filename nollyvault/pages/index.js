@@ -18,7 +18,7 @@ const TESTIMONIALS = [
 const FAQS = [
   { q: 'How many movies are available?', a: 'We\'re launching with 50+ licensed classics from the 90s and early 2000s, with new titles added monthly as we secure rights.' },
   { q: 'Can I watch on my TV?', a: 'Yes. NaijaRewind works on any browser — including smart TV browsers. Mobile apps for iOS and Android are coming soon.' },
-  { q: 'How do I pay from outside Nigeria?', a: 'International subscribers pay in USD via Stripe. We accept all major cards. Pricing is the same value, just in your currency.' },
+  { q: 'How do I pay from outside Nigeria?', a: 'International subscribers pay the same way as everyone else, through Paystack, which accepts major international cards. No separate signup or currency conversion needed.' },
   { q: 'What if a movie I want isn\'t available?', a: 'Request it. We have a request list and actively negotiate with producers. The more requests a title gets, the faster we move on licensing it.' },
   { q: 'Can I download movies to watch offline?', a: 'Offline downloads are available on Premium (₦3,000) and Family & Friends (₦5,000) plans.' },
   { q: 'What is a Watch Party?', a: 'A Watch Party lets you and friends or family watch the same movie in sync, from different locations. Chat alongside. Pause together. Available on the Family & Friends plan.' },
@@ -350,7 +350,7 @@ export default function Landing() {
               </div>
             ))}
           </div>
-          <div style={{fontSize:13,color:'var(--text3)'}}>Pay with Paystack (Nigeria) or Stripe (Diaspora) · Secure payments · No hidden fees</div>
+          <div style={{fontSize:13,color:'var(--text3)'}}>Pay with Paystack · International cards accepted · Secure payments · No hidden fees</div>
         </div>
       </div>
 

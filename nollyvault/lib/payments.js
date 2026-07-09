@@ -1,14 +1,20 @@
 // ─── Payment helpers ──────────────────────────────────────────────────────────
+// Paystack only. Stripe was evaluated and removed — Nigerian-registered
+// businesses can't open a standard Stripe merchant account (Nigeria is only in
+// Stripe's "extended network" via the Paystack acquisition, which is not the
+// same as real Stripe access). Paystack already accepts international cards,
+// so diaspora subscribers are covered without a second integration.
+// If payment-provider redundancy is ever needed later, Flutterwave was the
+// researched fallback — it supports direct Nigerian business registration
+// while still processing international cards, closer to a drop-in than
+// forming a US entity via Stripe Atlas.
 
 export const PLANS = {
   classic: {
     name: 'Classic',
     priceNGN: 150000,  // charged at ₦1,500 (shown as ₦2,500 slashed)      // Paystack uses kobo (1/100 of naira)
-    priceUSD: 499,         // Stripe uses cents
     nairaDisplay: '₦1,500',  // discounted from ₦2,500
-    usdDisplay: '$4.99',
     paystackPlanCode: 'PLN_classic_monthly', // set after creating in Paystack dashboard
-    stripePriceId: 'price_classic_monthly',  // set after creating in Stripe dashboard
     devices: 1,
     downloads: false,
     watchParty: false,
@@ -16,11 +22,8 @@ export const PLANS = {
   premium: {
     name: 'Premium',
     priceNGN: 300000,  // charged at ₦3,000 (shown as ₦3,500 slashed)
-    priceUSD: 999,
     nairaDisplay: '₦3,000',  // discounted from ₦3,500
-    usdDisplay: '$9.99',
     paystackPlanCode: 'PLN_premium_monthly',
-    stripePriceId: 'price_premium_monthly',
     devices: 3,
     downloads: true,
     watchParty: false,
@@ -28,11 +31,8 @@ export const PLANS = {
   family: {
     name: 'Family & Friends',
     priceNGN: 500000,
-    priceUSD: 1499,
     nairaDisplay: '₦5,000',
-    usdDisplay: '$14.99',
     paystackPlanCode: 'PLN_family_monthly',
-    stripePriceId: 'price_family_monthly',
     devices: 5,
     downloads: true,
     watchParty: true,
@@ -92,29 +92,4 @@ export async function cancelPaystackSubscription(subscriptionCode, emailToken) {
     body: JSON.stringify({ code: subscriptionCode, token: emailToken }),
   })
   return res.json()
-}
-
-// ─── STRIPE ───────────────────────────────────────────────────────────────────
-// Install: npm install stripe
-// Only import stripe on the server side (API routes)
-
-/**
- * Create a Stripe Checkout session for diaspora subscribers.
- * Call from an API route only.
- */
-export async function createStripeCheckout({ email, planKey, customerId }) {
-  const Stripe = (await import('stripe')).default
-  const stripe = new Stripe(process.env.STRIPE_SECRET_KEY)
-  const plan = PLANS[planKey]
-
-  const session = await stripe.checkout.sessions.create({
-    mode: 'subscription',
-    customer_email: customerId ? undefined : email,
-    customer: customerId || undefined,
-    line_items: [{ price: plan.stripePriceId, quantity: 1 }],
-    success_url: `${process.env.NEXT_PUBLIC_APP_URL}/account?session_id={CHECKOUT_SESSION_ID}`,
-    cancel_url: `${process.env.NEXT_PUBLIC_APP_URL}/pricing`,
-    metadata: { planKey },
-  })
-  return session // session.url is the checkout page to redirect to
 }
