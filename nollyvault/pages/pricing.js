@@ -6,7 +6,7 @@ const TIERS = [
   {
     key: 'classic',
     name: 'Classic',
-    originalNGN: '₦2,500', priceNGN: '₦1,500',
+    originalNGN: '₦3,000', priceNGN: '₦2,500',
     color: '#c8a84b',
     watchLimit: '20 hrs/month',
     features: [
@@ -24,7 +24,7 @@ const TIERS = [
   {
     key: 'premium',
     name: 'Premium',
-    originalNGN: '₦3,500', priceNGN: '₦3,000',
+    originalNGN: '₦4,500', priceNGN: '₦3,500',
     color: '#e8e8e8', popular: true,
     features: [
       { t: 'Full classic Nollywood catalog', ok: true },

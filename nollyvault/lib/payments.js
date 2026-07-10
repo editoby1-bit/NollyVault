@@ -12,18 +12,18 @@
 export const PLANS = {
   classic: {
     name: 'Classic',
-    priceNGN: 150000,  // charged at ₦1,500 (shown as ₦2,500 slashed)      // Paystack uses kobo (1/100 of naira)
-    nairaDisplay: '₦1,500',  // discounted from ₦2,500
-    paystackPlanCode: 'PLN_classic_monthly', // set after creating in Paystack dashboard
+    priceNGN: 250000,  // ₦2,500/month — launch price (regular ₦3,000)
+    nairaDisplay: '₦2,500',
+    paystackPlanCode: 'PLN_j2lulnum7u7m6lf',
     devices: 1,
     downloads: false,
     watchParty: false,
   },
   premium: {
     name: 'Premium',
-    priceNGN: 300000,  // charged at ₦3,000 (shown as ₦3,500 slashed)
-    nairaDisplay: '₦3,000',  // discounted from ₦3,500
-    paystackPlanCode: 'PLN_premium_monthly',
+    priceNGN: 350000,  // ₦3,500/month — launch price (regular ₦4,500)
+    nairaDisplay: '₦3,500',
+    paystackPlanCode: 'PLN_bhay2h9stwucapo',
     devices: 3,
     downloads: true,
     watchParty: false,
@@ -32,7 +32,7 @@ export const PLANS = {
     name: 'Family & Friends',
     priceNGN: 500000,
     nairaDisplay: '₦5,000',
-    paystackPlanCode: 'PLN_family_monthly',
+    paystackPlanCode: 'PLN_5r0a2kgbskwkxgo',
     devices: 5,
     downloads: true,
     watchParty: true,
