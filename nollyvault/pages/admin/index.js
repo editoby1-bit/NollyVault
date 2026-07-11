@@ -44,6 +44,7 @@ export default function AdminDashboard() {
   const [veteranActors, setVeteranActors] = useState(null)
   const [showAddActor, setShowAddActor] = useState(false)
   const [addingActor, setAddingActor] = useState(false)
+  const [editingActor, setEditingActor] = useState(null)
   const [uploading, setUploading] = useState(false)
   const [uploadProgress, setUploadProgress] = useState(0)
   const [tab, setTab] = useState('overview')
@@ -196,6 +197,35 @@ export default function AdminDashboard() {
         setShowAddActor(false)
         e.target.reset()
       } else showToast(data.error || 'Could not add actor', 'red')
+    } catch { showToast('Request failed', 'red') }
+    finally { setAddingActor(false) }
+  }
+
+  async function handleUpdateActor(e) {
+    e.preventDefault()
+    const fd = new FormData(e.target)
+    setAddingActor(true)
+    try {
+      const res = await fetch('/api/admin/veterans/update', {
+        method:'POST', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({
+          id: editingActor.id,
+          name: fd.get('name'),
+          bio: fd.get('bio'),
+          birthYear: fd.get('birthYear'),
+          stateOfOrigin: fd.get('stateOfOrigin'),
+          careerStartYear: fd.get('careerStartYear'),
+          careerHighlights: fd.get('careerHighlights'),
+          status: fd.get('status'),
+          isVerified: fd.get('isVerified') === 'on',
+        }),
+      })
+      const data = await res.json()
+      if (data.success) {
+        showToast(`${fd.get('name')} updated`, 'gold')
+        setVeteranActors(prev => prev.map(a => a.id === data.actor.id ? data.actor : a))
+        setEditingActor(null)
+      } else showToast(data.error || 'Could not update actor', 'red')
     } catch { showToast('Request failed', 'red') }
     finally { setAddingActor(false) }
   }
@@ -455,7 +485,7 @@ export default function AdminDashboard() {
                         <tr key={a.id}>
                           <td style={{color:'var(--text)',fontWeight:500}}>{a.name}</td>
                           <td><span style={{fontSize:11,padding:'2px 8px',borderRadius:4,background:'rgba(200,168,75,0.1)',color:'var(--gold)',fontWeight:600}}>{(a.status||'uncontacted').toUpperCase()}</span></td>
-                          <td><button className="btn btn-ghost" style={{fontSize:11,padding:'4px 10px'}} onClick={()=>showToast(`Contact ${a.name} to begin onboarding`)}>Onboard</button></td>
+                          <td><button className="btn btn-ghost" style={{fontSize:11,padding:'4px 10px',marginRight:6}} onClick={()=>setEditingActor(a)}>Edit</button><button className="btn btn-ghost" style={{fontSize:11,padding:'4px 10px'}} onClick={()=>showToast(`Contact ${a.name} to begin onboarding`)}>Onboard</button></td>
                         </tr>
                       ))}
                     </tbody>
@@ -528,6 +558,7 @@ export default function AdminDashboard() {
                           <td><span style={{fontSize:11,padding:'2px 8px',borderRadius:4,background:'rgba(90,85,80,0.3)',color:'var(--text3)'}}>{(a.status||'uncontacted').replace('_',' ').toUpperCase()}</span></td>
                           <td style={{color:a.is_verified?'var(--green)':'var(--text3)'}}>{a.is_verified?'✓ Verified':'—'}</td>
                           <td>
+                            <button className="btn btn-ghost" style={{fontSize:11,padding:'4px 10px',marginRight:6}} onClick={()=>setEditingActor(a)}>Edit</button>
                             <button className="btn btn-ghost" style={{fontSize:11,padding:'4px 10px'}} onClick={()=>showToast(`Draft outreach message for ${a.name}`)}>Draft Outreach</button>
                           </td>
                         </tr>
@@ -547,6 +578,56 @@ export default function AdminDashboard() {
           )}
         </div>
       </div>
+
+      {editingActor && (
+        <div style={{position:'fixed',inset:0,background:'rgba(0,0,0,0.7)',display:'flex',alignItems:'center',justifyContent:'center',zIndex:200,padding:20}} onClick={()=>setEditingActor(null)}>
+          <div className="card" style={{width:'100%',maxWidth:500,padding:24,maxHeight:'85vh',overflowY:'auto'}} onClick={e=>e.stopPropagation()}>
+            <h3 style={{fontSize:16,fontWeight:600,marginBottom:16}}>Edit {editingActor.name}</h3>
+            <form onSubmit={handleUpdateActor} style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:12}}>
+              <div style={{gridColumn:'1 / -1'}}>
+                <label style={{display:'block',fontSize:11,color:'var(--text3)',marginBottom:4,textTransform:'uppercase'}}>Full Name *</label>
+                <input name="name" className="form-input" defaultValue={editingActor.name} required />
+              </div>
+              <div style={{gridColumn:'1 / -1'}}>
+                <label style={{display:'block',fontSize:11,color:'var(--text3)',marginBottom:4,textTransform:'uppercase'}}>Bio</label>
+                <textarea name="bio" className="form-input" rows={2} defaultValue={editingActor.bio||''} style={{resize:'vertical'}} />
+              </div>
+              <div>
+                <label style={{display:'block',fontSize:11,color:'var(--text3)',marginBottom:4,textTransform:'uppercase'}}>Birth Year</label>
+                <input name="birthYear" type="number" className="form-input" defaultValue={editingActor.birth_year||''} />
+              </div>
+              <div>
+                <label style={{display:'block',fontSize:11,color:'var(--text3)',marginBottom:4,textTransform:'uppercase'}}>Career Start Year</label>
+                <input name="careerStartYear" type="number" className="form-input" defaultValue={editingActor.career_start_year||''} />
+              </div>
+              <div>
+                <label style={{display:'block',fontSize:11,color:'var(--text3)',marginBottom:4,textTransform:'uppercase'}}>State of Origin</label>
+                <input name="stateOfOrigin" className="form-input" defaultValue={editingActor.state_of_origin||''} />
+              </div>
+              <div>
+                <label style={{display:'block',fontSize:11,color:'var(--text3)',marginBottom:4,textTransform:'uppercase'}}>Status</label>
+                <select name="status" className="form-input" defaultValue={editingActor.status||'uncontacted'}>
+                  <option value="uncontacted">Uncontacted</option>
+                  <option value="active">Active</option>
+                  <option value="deceased">Deceased</option>
+                </select>
+              </div>
+              <div style={{gridColumn:'1 / -1'}}>
+                <label style={{display:'block',fontSize:11,color:'var(--text3)',marginBottom:4,textTransform:'uppercase'}}>Career Highlights</label>
+                <input name="careerHighlights" className="form-input" defaultValue={(editingActor.career_highlights||[]).join(', ')} placeholder="Comma-separated" />
+              </div>
+              <div style={{gridColumn:'1 / -1',display:'flex',alignItems:'center',gap:8}}>
+                <input type="checkbox" name="isVerified" id="isVerified" defaultChecked={!!editingActor.is_verified} />
+                <label htmlFor="isVerified" style={{fontSize:13,color:'var(--text2)'}}>Verified (contact + bank details confirmed)</label>
+              </div>
+              <div style={{gridColumn:'1 / -1',display:'flex',gap:10,marginTop:8}}>
+                <button type="submit" className="btn btn-gold" disabled={addingActor}>{addingActor?'Saving…':'Save Changes'}</button>
+                <button type="button" className="btn btn-ghost" onClick={()=>setEditingActor(null)}>Cancel</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
 
       {toast && <div className={`toast ${toast.type==='gold'?'toast-gold':toast.type==='red'?'toast-red':''}`}>{toast.msg}</div>}
     </>
