@@ -42,7 +42,8 @@ create table public.movies (
   description text,
   category text not null,            -- 'Classic Horror & Occult', 'Village Drama', etc.
   duration_seconds integer,          -- for progress tracking
-  cloudflare_video_uid text,         -- UID from Cloudflare Stream
+  cloudflare_video_uid text,         -- deprecated, unused since migrating to Bunny.net — see bunny_video_guid
+  bunny_video_guid text,             -- Bunny.net video GUID, set by the admin upload flow
   thumbnail_url text,
   producer text,
   is_featured boolean default false,

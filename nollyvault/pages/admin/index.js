@@ -4,16 +4,25 @@ import { useRouter } from 'next/router'
 import { useSession, useSupabaseClient } from '../_app'
 import Link from 'next/link'
 
-const STATS = [
-  { label:'Total Subscribers', value:'1,247', sub:'+83 this month', color:'var(--gold)' },
-  { label:'Monthly Revenue', value:'₦3.2M', sub:'Projected ₦11.5M at 5k subs', color:'var(--green)' },
-  { label:'Watch Hours', value:'8,940', sub:'This month', color:'var(--purple)' },
-  { label:'Movies Licensed', value:'15', sub:'All active', color:'var(--gold)' },
-  { label:'Producer Pool (30%)', value:'₦960k', sub:'Pending distribution', color:'#e8774a' },
-  { label:'Legacy Fund (10%)', value:'₦320k', sub:'Held for actor onboarding', color:'var(--green)' },
-  { label:'Active Watch Parties', value:'3', sub:'Right now', color:'var(--purple)' },
-  { label:'Veteran Actors Registered', value:'8', sub:'0 verified yet', color:'var(--gold)' },
-]
+// STATS used to be entirely hardcoded fake numbers (1,247 subscribers,
+// ₦3.2M revenue) that never updated no matter what was actually happening.
+// Subscriber count and movies licensed now pull real data. Revenue, watch
+// hours, and pool distributions need dedicated aggregation logic this
+// codebase doesn't have yet — showing "Not yet tracked" for those instead
+// of a fake number is safer than a founder mistaking placeholder data for
+// real business metrics.
+function buildStats(subscriberCount, activeMovieCount, veteranCount) {
+  return [
+    { label:'Total Subscribers', value: subscriberCount===null?'…':subscriberCount.toLocaleString(), sub:'Active paid subscriptions', color:'var(--gold)' },
+    { label:'Monthly Revenue', value:'—', sub:'Not yet tracked', color:'var(--green)' },
+    { label:'Watch Hours', value:'—', sub:'Not yet tracked', color:'var(--purple)' },
+    { label:'Movies Licensed', value: String(activeMovieCount), sub:'Currently active', color:'var(--gold)' },
+    { label:'Producer Pool (30%)', value:'—', sub:'Not yet tracked', color:'#e8774a' },
+    { label:'Legacy Fund (10%)', value:'—', sub:'Not yet tracked', color:'var(--green)' },
+    { label:'Active Watch Parties', value:'—', sub:'Not yet tracked', color:'var(--purple)' },
+    { label:'Veteran Actors Registered', value: veteranCount===null?'…':String(veteranCount), sub: veteranCount ? `${veteranCount} registered` : '0 registered', color:'var(--gold)' },
+  ]
+}
 
 const MOCK_MOVIES = [
   { id:'1', title:'Living in Bondage', year:1992, category:'Classic Horror & Occult', producer:'NEK Video Links', is_active:true },
@@ -23,16 +32,6 @@ const MOCK_MOVIES = [
   { id:'5', title:'Issakaba', year:2000, category:'Crime & Thriller', producer:'Lancelot Imasuen', is_active:false },
 ]
 
-const MOCK_ACTORS = [
-  { name:'Pete Edochie', movies:3, total_points:15, credits_ngn:48200, status:'uncontacted' },
-  { name:'Kanayo O. Kanayo', movies:3, total_points:15, credits_ngn:51400, status:'uncontacted' },
-  { name:'Kenneth Okonkwo', movies:1, total_points:5, credits_ngn:32100, status:'uncontacted' },
-  { name:'Patience Ozokwor', movies:2, total_points:8, credits_ngn:28700, status:'uncontacted' },
-  { name:'Ngozi Ezeonu', movies:3, total_points:9, credits_ngn:22400, status:'uncontacted' },
-  { name:'Liz Benson', movies:2, total_points:8, credits_ngn:19800, status:'uncontacted' },
-  { name:'Eucharia Anunobi', movies:1, total_points:5, credits_ngn:14600, status:'uncontacted' },
-  { name:'Hanks Anuku', movies:1, total_points:3, credits_ngn:11200, status:'uncontacted' },
-]
 
 const TABS = ['overview','movies','upload','royalties','legacy fund','veterans','referrals','ads & sponsors']
 
@@ -41,6 +40,10 @@ export default function AdminDashboard() {
   const supabase = useSupabaseClient()
   const router = useRouter()
   const [movies, setMovies] = useState(MOCK_MOVIES)
+  const [subscriberCount, setSubscriberCount] = useState(null)
+  const [veteranActors, setVeteranActors] = useState(null)
+  const [showAddActor, setShowAddActor] = useState(false)
+  const [addingActor, setAddingActor] = useState(false)
   const [uploading, setUploading] = useState(false)
   const [uploadProgress, setUploadProgress] = useState(0)
   const [tab, setTab] = useState('overview')
@@ -78,6 +81,12 @@ export default function AdminDashboard() {
     if (!supabase) return
     supabase.from('movies').select('*').order('created_at',{ascending:false})
       .then(({data})=>{ if(data?.length) setMovies(data) })
+    // Real subscriber count — replaces the hardcoded "1,247" that never updated
+    supabase.from('users').select('id',{count:'exact',head:true}).eq('plan_status','active')
+      .then(({count})=>setSubscriberCount(count ?? 0))
+    // Real veteran actor list — replaces MOCK_ACTORS' fake credit amounts
+    supabase.from('veteran_actors').select('*').order('created_at',{ascending:false})
+      .then(({data})=>setVeteranActors(data || []))
   }, [supabase])
 
   async function handleUpload(e) {
@@ -153,14 +162,42 @@ export default function AdminDashboard() {
     }
   }
 
-  async function creditLegacyFund() {
+  async function creditLegacyFund(period, totalRevenueNGN) {
+    if (!period || !totalRevenueNGN) { showToast('Enter both period and revenue amount','red'); return }
     const res = await fetch('/api/admin/legacy-fund/credit', {
       method:'POST', headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({ period:'2024-06', totalRevenueNGN:3200000 }),
+      body:JSON.stringify({ period, totalRevenueNGN: Number(totalRevenueNGN) }),
     })
     const data = await res.json()
     if (data.success) showToast(`Legacy Fund credited ₦${data.fund_credited_ngn?.toLocaleString()} for ${data.actors_allocated} actors`,'gold')
     else showToast(data.message||data.error,'gold')
+  }
+
+  async function handleAddActor(e) {
+    e.preventDefault()
+    const fd = new FormData(e.target)
+    setAddingActor(true)
+    try {
+      const res = await fetch('/api/admin/veterans/add', {
+        method:'POST', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({
+          name: fd.get('name'),
+          bio: fd.get('bio'),
+          birthYear: fd.get('birthYear'),
+          stateOfOrigin: fd.get('stateOfOrigin'),
+          careerStartYear: fd.get('careerStartYear'),
+          careerHighlights: fd.get('careerHighlights'),
+        }),
+      })
+      const data = await res.json()
+      if (data.success) {
+        showToast(`${fd.get('name')} added to the Legends registry`, 'gold')
+        setVeteranActors(prev => [data.actor, ...(prev||[])])
+        setShowAddActor(false)
+        e.target.reset()
+      } else showToast(data.error || 'Could not add actor', 'red')
+    } catch { showToast('Request failed', 'red') }
+    finally { setAddingActor(false) }
   }
 
   if (access === 'checking') {
@@ -236,7 +273,7 @@ export default function AdminDashboard() {
           {tab==='overview' && (
             <>
               <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(160px,1fr))',gap:12,marginBottom:32}}>
-                {STATS.map(s=>(
+                {buildStats(subscriberCount, movies.filter(m=>m.is_active).length, veteranActors?.length ?? null).map(s=>(
                   <div key={s.label} className="card" style={{padding:'16px 18px'}}>
                     <div style={{fontSize:11,color:'var(--text3)',textTransform:'uppercase',letterSpacing:'.07em',marginBottom:6}}>{s.label}</div>
                     <div style={{fontFamily:"'Playfair Display',serif",fontSize:24,fontWeight:700,color:s.color}}>{s.value}</div>
@@ -302,9 +339,10 @@ export default function AdminDashboard() {
                 ))}
                 <div style={{marginBottom:14}}>
                   <label style={{display:'block',fontSize:11,fontWeight:600,color:'var(--text2)',marginBottom:6,textTransform:'uppercase',letterSpacing:'.07em'}}>Category</label>
-                  <select className="form-select" name="category">
-                    {['Classic Horror & Occult','Village Drama','Crime & Thriller','Family Favorites','Romance','Action'].map(c=><option key={c}>{c}</option>)}
-                  </select>
+                  <input className="form-input" list="category-options" name="category" placeholder="Pick a suggestion or type your own" required />
+                  <datalist id="category-options">
+                    {['Classic Horror & Occult','Village Drama','Crime & Thriller','Family Favorites','Romance','Action','Comedy','Religious','Musical','Epic & Historical','Others'].map(c=><option key={c} value={c} />)}
+                  </datalist>
                 </div>
                 <div style={{marginBottom:20}}>
                   <label style={{display:'block',fontSize:11,fontWeight:600,color:'var(--text2)',marginBottom:6,textTransform:'uppercase',letterSpacing:'.07em'}}>Description</label>
@@ -388,33 +426,44 @@ export default function AdminDashboard() {
                   (Lead = 5pts, Major Supporting = 3pts, Minor = 1pt) weighted by watch minutes of their films. 
                   Funds are held as <strong style={{color:'var(--text)'}}>status: held</strong> until actors are verified and onboarded.
                 </p>
-                <div style={{display:'flex',gap:10,flexWrap:'wrap'}}>
-                  <button className="btn btn-green" onClick={creditLegacyFund}>Credit June 2024 Fund (₦320k)</button>
-                  <button className="btn btn-ghost" onClick={()=>showToast('Export actor allocations — coming soon')}>Export Allocations</button>
-                </div>
+                <form onSubmit={(e)=>{e.preventDefault(); const fd=new FormData(e.target); creditLegacyFund(fd.get('period'), fd.get('revenue'));}} style={{display:'flex',gap:10,flexWrap:'wrap',alignItems:'flex-end'}}>
+                  <div>
+                    <label style={{display:'block',fontSize:10,color:'var(--text3)',marginBottom:4,textTransform:'uppercase'}}>Period (e.g. 2026-07)</label>
+                    <input name="period" className="form-input" style={{width:140}} placeholder="2026-07" required />
+                  </div>
+                  <div>
+                    <label style={{display:'block',fontSize:10,color:'var(--text3)',marginBottom:4,textTransform:'uppercase'}}>Total Revenue (₦)</label>
+                    <input name="revenue" type="number" className="form-input" style={{width:160}} placeholder="Real amount from Paystack" required />
+                  </div>
+                  <button type="submit" className="btn btn-green">Credit Fund (10%)</button>
+                  <button type="button" className="btn btn-ghost" onClick={()=>showToast('Export actor allocations — coming soon')}>Export Allocations</button>
+                </form>
               </div>
 
               {/* Actor allocations table */}
               <div style={{fontWeight:600,fontSize:15,marginBottom:12}}>Actor Legacy Credits — Held Pending Onboarding</div>
               <div className="card" style={{overflow:'hidden',marginBottom:24}}>
-                <table>
-                  <thead><tr><th>Actor</th><th>Movies</th><th>Points</th><th>Credits (₦)</th><th>Status</th><th></th></tr></thead>
-                  <tbody>
-                    {MOCK_ACTORS.map(a=>(
-                      <tr key={a.name}>
-                        <td style={{color:'var(--text)',fontWeight:500}}>{a.name}</td>
-                        <td>{a.movies}</td>
-                        <td style={{color:'var(--gold)'}}>{a.total_points}</td>
-                        <td style={{color:'var(--green)',fontWeight:500}}>₦{a.credits_ngn.toLocaleString()}</td>
-                        <td><span style={{fontSize:11,padding:'2px 8px',borderRadius:4,background:'rgba(200,168,75,0.1)',color:'var(--gold)',fontWeight:600}}>HELD</span></td>
-                        <td><button className="btn btn-ghost" style={{fontSize:11,padding:'4px 10px'}} onClick={()=>showToast(`Contact ${a.name} to begin onboarding`)}>Onboard</button></td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+                {!veteranActors?.length ? (
+                  <div style={{padding:'32px 20px',textAlign:'center',color:'var(--text3)',fontSize:13}}>
+                    No veteran actors registered yet. Add actors under the Veterans tab to start tracking credits.
+                  </div>
+                ) : (
+                  <table>
+                    <thead><tr><th>Actor</th><th>Status</th><th></th></tr></thead>
+                    <tbody>
+                      {veteranActors.map(a=>(
+                        <tr key={a.id}>
+                          <td style={{color:'var(--text)',fontWeight:500}}>{a.name}</td>
+                          <td><span style={{fontSize:11,padding:'2px 8px',borderRadius:4,background:'rgba(200,168,75,0.1)',color:'var(--gold)',fontWeight:600}}>{(a.status||'uncontacted').toUpperCase()}</span></td>
+                          <td><button className="btn btn-ghost" style={{fontSize:11,padding:'4px 10px'}} onClick={()=>showToast(`Contact ${a.name} to begin onboarding`)}>Onboard</button></td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                )}
               </div>
               <div style={{fontSize:13,color:'var(--text3)',padding:'12px 16px',background:'var(--bg2)',border:'1px solid var(--bg4)',borderRadius:8}}>
-                💡 Total held: <strong style={{color:'var(--green)'}}>₦{MOCK_ACTORS.reduce((s,a)=>s+a.credits_ngn,0).toLocaleString()}</strong> across {MOCK_ACTORS.length} actors. 
+                💡 Real per-actor credit amounts require legacy_fund_ledger and actor_legacy_allocations data, which populate once you've credited a real revenue period above and licensed movies are linked to actors via movie_legacy_points.
                 Once an actor is verified (ID + bank details), click <strong>Onboard</strong> to begin direct payment setup.
               </div>
             </div>
@@ -429,27 +478,63 @@ export default function AdminDashboard() {
                   Track contact status, verification, and onboarding for each veteran actor. 
                   Start with research and outreach — no agreements needed yet.
                 </p>
-                <button className="btn btn-gold" onClick={()=>showToast('Add veteran actor form — connects to veteran_actors table')}>+ Add Veteran Actor</button>
+                <button className="btn btn-gold" onClick={()=>setShowAddActor(s=>!s)}>{showAddActor?'Cancel':'+ Add Veteran Actor'}</button>
+
+                {showAddActor && (
+                  <form onSubmit={handleAddActor} style={{marginTop:16,paddingTop:16,borderTop:'1px solid var(--bg4)',display:'grid',gridTemplateColumns:'1fr 1fr',gap:12}}>
+                    <div style={{gridColumn:'1 / -1'}}>
+                      <label style={{display:'block',fontSize:11,color:'var(--text3)',marginBottom:4,textTransform:'uppercase'}}>Full Name *</label>
+                      <input name="name" className="form-input" placeholder="e.g. Pete Edochie" required />
+                    </div>
+                    <div style={{gridColumn:'1 / -1'}}>
+                      <label style={{display:'block',fontSize:11,color:'var(--text3)',marginBottom:4,textTransform:'uppercase'}}>Bio</label>
+                      <textarea name="bio" className="form-input" rows={2} placeholder="Short tribute / career summary" style={{resize:'vertical'}} />
+                    </div>
+                    <div>
+                      <label style={{display:'block',fontSize:11,color:'var(--text3)',marginBottom:4,textTransform:'uppercase'}}>Birth Year</label>
+                      <input name="birthYear" type="number" className="form-input" placeholder="1947" />
+                    </div>
+                    <div>
+                      <label style={{display:'block',fontSize:11,color:'var(--text3)',marginBottom:4,textTransform:'uppercase'}}>Career Start Year</label>
+                      <input name="careerStartYear" type="number" className="form-input" placeholder="1975" />
+                    </div>
+                    <div>
+                      <label style={{display:'block',fontSize:11,color:'var(--text3)',marginBottom:4,textTransform:'uppercase'}}>State of Origin</label>
+                      <input name="stateOfOrigin" className="form-input" placeholder="e.g. Anambra" />
+                    </div>
+                    <div>
+                      <label style={{display:'block',fontSize:11,color:'var(--text3)',marginBottom:4,textTransform:'uppercase'}}>Career Highlights</label>
+                      <input name="careerHighlights" className="form-input" placeholder="Comma-separated, e.g. AMAA Lifetime Award, 200+ films" />
+                    </div>
+                    <div style={{gridColumn:'1 / -1'}}>
+                      <button type="submit" className="btn btn-gold" disabled={addingActor}>{addingActor?'Adding…':'Add to Legends'}</button>
+                    </div>
+                  </form>
+                )}
               </div>
 
               <div className="card" style={{overflow:'hidden'}}>
-                <table>
-                  <thead><tr><th>Actor</th><th>Films on Platform</th><th>Fund Held</th><th>Contact Status</th><th>Verified</th><th>Action</th></tr></thead>
-                  <tbody>
-                    {MOCK_ACTORS.map(a=>(
-                      <tr key={a.name}>
-                        <td style={{color:'var(--text)',fontWeight:500}}>{a.name}</td>
-                        <td>{a.movies} films</td>
-                        <td style={{color:'var(--green)',fontWeight:500}}>₦{a.credits_ngn.toLocaleString()}</td>
-                        <td><span style={{fontSize:11,padding:'2px 8px',borderRadius:4,background:'rgba(90,85,80,0.3)',color:'var(--text3)'}}>NOT CONTACTED</span></td>
-                        <td style={{color:'var(--text3)'}}>—</td>
-                        <td>
-                          <button className="btn btn-ghost" style={{fontSize:11,padding:'4px 10px'}} onClick={()=>showToast(`Draft outreach message for ${a.name}`)}>Draft Outreach</button>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+                {!veteranActors?.length ? (
+                  <div style={{padding:'32px 20px',textAlign:'center',color:'var(--text3)',fontSize:13}}>
+                    No veteran actors registered yet. Use "+ Add Veteran Actor" above to start building the registry.
+                  </div>
+                ) : (
+                  <table>
+                    <thead><tr><th>Actor</th><th>Contact Status</th><th>Verified</th><th>Action</th></tr></thead>
+                    <tbody>
+                      {veteranActors.map(a=>(
+                        <tr key={a.id}>
+                          <td style={{color:'var(--text)',fontWeight:500}}>{a.name}</td>
+                          <td><span style={{fontSize:11,padding:'2px 8px',borderRadius:4,background:'rgba(90,85,80,0.3)',color:'var(--text3)'}}>{(a.status||'uncontacted').replace('_',' ').toUpperCase()}</span></td>
+                          <td style={{color:a.is_verified?'var(--green)':'var(--text3)'}}>{a.is_verified?'✓ Verified':'—'}</td>
+                          <td>
+                            <button className="btn btn-ghost" style={{fontSize:11,padding:'4px 10px'}} onClick={()=>showToast(`Draft outreach message for ${a.name}`)}>Draft Outreach</button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                )}
               </div>
 
               <div style={{marginTop:20,padding:'16px',background:'rgba(200,168,75,0.06)',border:'1px solid rgba(200,168,75,0.2)',borderRadius:8,fontSize:13,color:'var(--text2)',lineHeight:1.7}}>

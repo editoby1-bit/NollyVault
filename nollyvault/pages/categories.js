@@ -14,7 +14,13 @@ const CATEGORIES = [
   { id: 'Family Favorites', label: 'Family Favorites', icon: '👨‍👩‍👧‍👦', color: '#c8a84b', desc: 'Watch together. Movies the whole family will love.' },
   { id: 'Romance', label: 'Romance', icon: '💕', color: '#e85d9a', desc: 'Love stories from the golden era of Nigerian cinema.' },
   { id: 'Action', label: 'Action', icon: '⚡', color: '#e84a4a', desc: 'High-stakes stories of courage and survival.' },
+  { id: 'Comedy', label: 'Comedy', icon: '😂', color: '#f0c419', desc: 'Classic Nollywood comedy that had the whole country laughing.' },
+  { id: 'Religious', label: 'Religious', icon: '🙏', color: '#5ba3d0', desc: 'Faith-driven stories of redemption, morality, and the spirit.' },
+  { id: 'Musical', label: 'Musical', icon: '🎵', color: '#e879f9', desc: 'Music, dance, and drama woven into classic Nigerian storytelling.' },
+  { id: 'Epic & Historical', label: 'Epic & Historical', icon: '👑', color: '#c8a84b', desc: 'Kingdoms, legends, and stories rooted in Nigerian history.' },
+  { id: 'Others', label: 'Others', icon: '🎬', color: '#9a9590', desc: 'Great films that don\'t fit neatly into one genre.' },
 ]
+const NAMED_CATEGORY_IDS = CATEGORIES.filter(c => c.id !== 'Others').map(c => c.id)
 
 export default function Categories() {
   const router = useRouter()
@@ -28,7 +34,9 @@ export default function Categories() {
   const [selectedMovie, setSelectedMovie] = useState(null)
 
   const filteredMovies = selectedCategory
-    ? movies.filter(m => m.category === selectedCategory)
+    ? (selectedCategory === 'Others'
+        ? movies.filter(m => !NAMED_CATEGORY_IDS.includes(m.category))
+        : movies.filter(m => m.category === selectedCategory))
     : []
 
   return (
