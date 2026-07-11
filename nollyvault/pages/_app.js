@@ -34,11 +34,15 @@ export default function App({ Component, pageProps }) {
       return
     }
 
-    import('@supabase/supabase-js').then(({ createClient }) => {
-      // autoRefreshToken (default true) handles silent background refresh of
-      // the access token before it expires, and refresh token rotation, on
-      // its own — this is built into supabase-js, not something to hand-roll.
-      const client = createClient(url, key)
+    // Use the cookie-syncing browser client, not plain createClient() from
+    // supabase-js — that version only stores the session in localStorage,
+    // which server-side API routes (admin gating, progress tracking,
+    // referrals, watch parties, etc.) can't read at all, since they check
+    // cookies via createServerSupabaseClient(). Without this, every
+    // server-side "is this user logged in / are they an admin" check
+    // silently sees no session, for everyone, regardless of credentials.
+    import('../lib/supabase').then(({ createBrowserSupabaseClient }) => {
+      const client = createBrowserSupabaseClient()
       setSupabase(client)
       client.auth.getSession().then(({ data: { session } }) => {
         setSession(session)
@@ -47,9 +51,6 @@ export default function App({ Component, pageProps }) {
       })
       const { data: { subscription } } = client.auth.onAuthStateChange((event, s) => {
         setSession(s)
-        // A session that existed and is now gone — not just "never logged
-        // in" — while sitting on a page that needs one. This catches
-        // expired/revoked refresh tokens and signing out in another tab.
         if (hadSession.current && !s && !PUBLIC_PATHS.includes(router.pathname)) {
           router.push(`/login?redirect=${encodeURIComponent(router.asPath)}`)
         }
