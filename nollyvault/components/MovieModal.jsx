@@ -19,11 +19,32 @@ export default function MovieModal({ movie, onClose, onPlay, watchlisted, onWatc
 
         {/* Header image */}
         <div style={{ position: 'relative', height: 300, overflow: 'hidden', borderRadius: '14px 14px 0 0' }}>
-          <img
-            src={movie.thumbnail_url || movie.thumbnail || `https://via.placeholder.com/660x300/1a0a00/c8a84b?text=${encodeURIComponent(movie.title)}`}
-            alt={movie.title}
-            style={{ width: '100%', height: '100%', objectFit: 'cover' }}
-          />
+          {(movie.thumbnail_url || movie.thumbnail) ? (
+            <img
+              src={movie.thumbnail_url || movie.thumbnail}
+              alt={movie.title}
+              style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+            />
+          ) : (
+            <div style={{
+              width: '100%', height: '100%',
+              background: 'linear-gradient(160deg,#1a0f00 0%,#2a1800 45%,#0d0800 100%)',
+              position: 'relative', display: 'flex', flexDirection: 'column',
+              alignItems: 'center', justifyContent: 'center',
+            }}>
+              <div style={{ position:'absolute', inset:0, opacity:.2, backgroundImage:'repeating-linear-gradient(0deg,transparent,transparent 3px,rgba(200,168,75,0.15) 3px,rgba(200,168,75,0.15) 4px)' }}/>
+              <svg width="56" height="56" viewBox="0 0 64 64" style={{ opacity:.5, marginBottom:10 }}>
+                <circle cx="32" cy="32" r="28" fill="none" stroke="#c8a84b" strokeWidth="2"/>
+                <circle cx="32" cy="32" r="8" fill="none" stroke="#c8a84b" strokeWidth="2"/>
+                {[0,60,120,180,240,300].map(deg=>(
+                  <circle key={deg} cx={32+18*Math.cos(deg*Math.PI/180)} cy={32+18*Math.sin(deg*Math.PI/180)} r="5" fill="none" stroke="#c8a84b" strokeWidth="1.5"/>
+                ))}
+              </svg>
+              <div style={{ fontFamily:"'Playfair Display',serif", fontSize:18, fontWeight:700, color:'var(--gold)', textAlign:'center', position:'relative' }}>
+                {movie.title}
+              </div>
+            </div>
+          )}
           <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(to top, var(--bg2) 5%, transparent 60%)' }} />
           <button
             onClick={onClose}

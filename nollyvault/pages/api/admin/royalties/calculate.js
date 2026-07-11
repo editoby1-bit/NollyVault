@@ -3,7 +3,7 @@
 // Distributes 30% of revenue proportionally by watch minutes per movie.
 import { createServerSupabaseClient } from '../../../../lib/supabase'
 
-const ADMIN_EMAILS = (process.env.ADMIN_EMAILS || '').split(',')
+const ADMIN_EMAILS = (process.env.ADMIN_EMAILS || '').split(',').map(e => e.trim()).filter(Boolean)
 const ROYALTY_POOL_PCT = 0.30  // 30% of revenue goes to royalty pool
 
 export default async function handler(req, res) {

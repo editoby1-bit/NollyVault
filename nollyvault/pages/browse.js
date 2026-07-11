@@ -137,7 +137,29 @@ export default function Browse() {
           <div style={{position:'relative',height:540,background:'linear-gradient(135deg,#0a0500 0%,#1a0a00 50%,#050a00 100%)',display:'flex',alignItems:'flex-end',padding:'0 40px 56px',overflow:'hidden'}}>
             <div style={{position:'absolute',inset:0,background:'radial-gradient(ellipse at 70% 40%,rgba(200,168,75,0.13) 0%,transparent 60%)'}}/>
             <div style={{position:'absolute',right:80,top:40,bottom:0,width:220,borderRadius:'12px 12px 0 0',overflow:'hidden',boxShadow:'-20px 0 60px rgba(0,0,0,0.8)'}}>
-              <img src={featuredMovie.thumbnail_url||`https://via.placeholder.com/220x500/1a0a00/c8a84b?text=${encodeURIComponent(featuredMovie.title)}`} alt={featuredMovie.title} style={{width:'100%',height:'100%',objectFit:'cover',opacity:.85}}/>
+              {featuredMovie.thumbnail_url ? (
+                <img src={featuredMovie.thumbnail_url} alt={featuredMovie.title} style={{width:'100%',height:'100%',objectFit:'cover',opacity:.85}}/>
+              ) : (
+                // Fallback for movies without uploaded poster art yet — a
+                // designed vintage-reel treatment, not a scraped image.
+                // Real poster art is typically its own separate copyright
+                // from the film itself, so this stays generic until genuine
+                // licensed artwork is uploaded per-movie.
+                <div style={{width:'100%',height:'100%',background:'linear-gradient(160deg,#1a0f00 0%,#2a1800 45%,#0d0800 100%)',position:'relative',display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',padding:20}}>
+                  <div style={{position:'absolute',inset:0,opacity:.25,backgroundImage:'repeating-linear-gradient(0deg,transparent,transparent 3px,rgba(200,168,75,0.15) 3px,rgba(200,168,75,0.15) 4px)'}}/>
+                  <svg width="64" height="64" viewBox="0 0 64 64" style={{opacity:.5,marginBottom:16}}>
+                    <circle cx="32" cy="32" r="28" fill="none" stroke="#c8a84b" strokeWidth="2"/>
+                    <circle cx="32" cy="32" r="8" fill="none" stroke="#c8a84b" strokeWidth="2"/>
+                    {[0,60,120,180,240,300].map(deg=>(
+                      <circle key={deg} cx={32+18*Math.cos(deg*Math.PI/180)} cy={32+18*Math.sin(deg*Math.PI/180)} r="5" fill="none" stroke="#c8a84b" strokeWidth="1.5"/>
+                    ))}
+                  </svg>
+                  <div style={{fontFamily:"'Playfair Display',serif",fontSize:15,fontWeight:700,color:'var(--gold)',textAlign:'center',lineHeight:1.3,position:'relative'}}>
+                    {featuredMovie.title}
+                  </div>
+                  <div style={{fontSize:10,color:'var(--text3)',marginTop:8,textTransform:'uppercase',letterSpacing:'.1em',position:'relative'}}>{featuredMovie.year}</div>
+                </div>
+              )}
             </div>
             <div style={{position:'relative',maxWidth:560}}>
               <span className="badge-gold" style={{marginBottom:14}}>⭐ Featured Classic</span>

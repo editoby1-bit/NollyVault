@@ -3,7 +3,7 @@
 import { createServerSupabaseClient } from '../../../lib/supabase'
 import { createVideo } from '../../../lib/bunny'
 
-const ADMIN_EMAILS = (process.env.ADMIN_EMAILS || '').split(',')
+const ADMIN_EMAILS = (process.env.ADMIN_EMAILS || '').split(',').map(e => e.trim()).filter(Boolean)
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).end()

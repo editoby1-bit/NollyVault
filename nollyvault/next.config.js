@@ -3,9 +3,13 @@ const nextConfig = {
   reactStrictMode: true,
   images: {
     remotePatterns: [
-      { protocol: 'https', hostname: 'imagedelivery.net' },
-      { protocol: 'https', hostname: 'customer-streams.cloudflarestream.com' },
-      { protocol: 'https', hostname: 'via.placeholder.com' },
+      // Cloudflare domains and via.placeholder.com removed — this project
+      // uses Bunny.net for video/images now, and via.placeholder.com is a
+      // dead service (shut down), which is why fallback thumbnails were
+      // showing as broken images across the app until this was found.
+      ...(process.env.BUNNY_CDN_HOSTNAME
+        ? [{ protocol: 'https', hostname: process.env.BUNNY_CDN_HOSTNAME }]
+        : []),
     ],
   },
 }

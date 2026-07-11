@@ -2,7 +2,7 @@
 // Calculate monthly referral earnings for all actors
 import { createServerSupabaseClient, supabaseAdmin } from '../../../../lib/supabase'
 
-const ADMIN_EMAILS = (process.env.ADMIN_EMAILS || '').split(',')
+const ADMIN_EMAILS = (process.env.ADMIN_EMAILS || '').split(',').map(e => e.trim()).filter(Boolean)
 const REFERRAL_PCT = 0.05
 
 export default async function handler(req, res) {

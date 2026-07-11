@@ -22,12 +22,33 @@ export default function MovieCard({ movie, onClick, progressPct = null, size = '
         background: 'var(--bg3)', overflow: 'hidden',
         position: 'relative', border: '1px solid var(--bg4)',
       }}>
-        <img
-          src={movie.thumbnail_url || movie.thumbnail || `https://via.placeholder.com/${w}x${h}/1a0a00/c8a84b?text=${encodeURIComponent(movie.title)}`}
-          alt={movie.title}
-          style={{ width: '100%', height: '100%', objectFit: 'cover' }}
-          loading="lazy"
-        />
+        {(movie.thumbnail_url || movie.thumbnail) ? (
+          <img
+            src={movie.thumbnail_url || movie.thumbnail}
+            alt={movie.title}
+            style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+            loading="lazy"
+          />
+        ) : (
+          <div style={{
+            width: '100%', height: '100%',
+            background: 'linear-gradient(160deg,#1a0f00 0%,#2a1800 45%,#0d0800 100%)',
+            position: 'relative', display: 'flex', flexDirection: 'column',
+            alignItems: 'center', justifyContent: 'center', padding: 10,
+          }}>
+            <div style={{ position:'absolute', inset:0, opacity:.2, backgroundImage:'repeating-linear-gradient(0deg,transparent,transparent 3px,rgba(200,168,75,0.15) 3px,rgba(200,168,75,0.15) 4px)' }}/>
+            <svg width={Math.round(w*0.28)} height={Math.round(w*0.28)} viewBox="0 0 64 64" style={{ opacity:.5, marginBottom:8 }}>
+              <circle cx="32" cy="32" r="28" fill="none" stroke="#c8a84b" strokeWidth="2"/>
+              <circle cx="32" cy="32" r="8" fill="none" stroke="#c8a84b" strokeWidth="2"/>
+              {[0,60,120,180,240,300].map(deg=>(
+                <circle key={deg} cx={32+18*Math.cos(deg*Math.PI/180)} cy={32+18*Math.sin(deg*Math.PI/180)} r="5" fill="none" stroke="#c8a84b" strokeWidth="1.5"/>
+              ))}
+            </svg>
+            <div style={{ fontFamily:"'Playfair Display',serif", fontSize:12, fontWeight:700, color:'var(--gold)', textAlign:'center', lineHeight:1.3, position:'relative' }}>
+              {movie.title}
+            </div>
+          </div>
+        )}
         {/* Hover overlay */}
         <div style={{
           position: 'absolute', inset: 0,

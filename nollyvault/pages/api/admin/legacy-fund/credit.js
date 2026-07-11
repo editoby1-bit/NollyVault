@@ -5,7 +5,7 @@
 //   20% → Preservation Fund          (VHS restoration, digitization, archival)
 import { createServerSupabaseClient, supabaseAdmin } from '../../../../lib/supabase'
 
-const ADMIN_EMAILS = (process.env.ADMIN_EMAILS || '').split(',')
+const ADMIN_EMAILS = (process.env.ADMIN_EMAILS || '').split(',').map(e => e.trim()).filter(Boolean)
 
 // Revenue allocations
 const FUND_PCT        = 0.10   // 10% of total revenue → entire fund
