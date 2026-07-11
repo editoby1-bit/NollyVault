@@ -42,9 +42,11 @@ export default async function handler(req, res) {
       is_active: false,
     }
 
-    await supabase.from(table).insert(insertData)
+    const { data: inserted, error: insertErr } = await supabase.from(table).insert(insertData).select('id').single()
+    if (insertErr) throw insertErr
 
     return res.json({
+      movieId: inserted.id,
       bunny_video_guid: bunnyVideo.guid,
       bunny_video_id: bunnyVideo.guid,
       // Upload instructions:

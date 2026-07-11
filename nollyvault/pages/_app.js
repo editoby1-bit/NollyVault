@@ -1,4 +1,5 @@
-import { useState, useEffect, createContext, useContext } from 'react'
+import { useState, useEffect, useRef, createContext, useContext } from 'react'
+import { useRouter } from 'next/router'
 import Head from 'next/head'
 import '../styles/globals.css'
 
@@ -6,10 +7,20 @@ export const SupabaseContext = createContext({ supabase: null, session: null })
 export const useSupabaseClient = () => useContext(SupabaseContext).supabase
 export const useSession = () => useContext(SupabaseContext).session
 
+// Pages that don't require a session — everything else is treated as
+// protected. If a session unexpectedly disappears (refresh token expired or
+// revoked, user signed out in another tab, etc.) while on a protected page,
+// we send them to /login with a redirect param so they land back exactly
+// where they were after signing back in, instead of just silently breaking
+// or dumping them on the homepage with no context.
+const PUBLIC_PATHS = ['/', '/login', '/signup', '/forgot-password', '/reset-password', '/pricing', '/advertise', '/partners']
+
 export default function App({ Component, pageProps }) {
+  const router = useRouter()
   const [supabase, setSupabase] = useState(null)
   const [session, setSession] = useState(null)
   const [ready, setReady] = useState(false)
+  const hadSession = useRef(false)
 
   useEffect(() => {
     const url = process.env.NEXT_PUBLIC_SUPABASE_URL
@@ -24,13 +35,26 @@ export default function App({ Component, pageProps }) {
     }
 
     import('@supabase/supabase-js').then(({ createClient }) => {
+      // autoRefreshToken (default true) handles silent background refresh of
+      // the access token before it expires, and refresh token rotation, on
+      // its own — this is built into supabase-js, not something to hand-roll.
       const client = createClient(url, key)
       setSupabase(client)
       client.auth.getSession().then(({ data: { session } }) => {
         setSession(session)
+        hadSession.current = !!session
         setReady(true)
       })
-      const { data: { subscription } } = client.auth.onAuthStateChange((_e, s) => setSession(s))
+      const { data: { subscription } } = client.auth.onAuthStateChange((event, s) => {
+        setSession(s)
+        // A session that existed and is now gone — not just "never logged
+        // in" — while sitting on a page that needs one. This catches
+        // expired/revoked refresh tokens and signing out in another tab.
+        if (hadSession.current && !s && !PUBLIC_PATHS.includes(router.pathname)) {
+          router.push(`/login?redirect=${encodeURIComponent(router.asPath)}`)
+        }
+        hadSession.current = !!s
+      })
       return () => subscription.unsubscribe()
     })
   }, [])

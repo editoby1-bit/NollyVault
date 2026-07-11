@@ -42,6 +42,7 @@ export default function AdminDashboard() {
   const router = useRouter()
   const [movies, setMovies] = useState(MOCK_MOVIES)
   const [uploading, setUploading] = useState(false)
+  const [uploadProgress, setUploadProgress] = useState(0)
   const [tab, setTab] = useState('overview')
   const [toast, setToast] = useState(null)
 
@@ -82,17 +83,74 @@ export default function AdminDashboard() {
   async function handleUpload(e) {
     e.preventDefault()
     const fd = new FormData(e.target)
+    const file = fd.get('videoFile')
+    if (!file || !file.size) { showToast('Choose a video file first', 'red'); return }
+
     setUploading(true)
+    setUploadProgress(0)
     try {
+      // 1. Create the Bunny video placeholder + Supabase row (is_active: false)
       const res = await fetch('/api/admin/upload-url', {
         method:'POST', headers:{'Content-Type':'application/json'},
         body:JSON.stringify({ title:fd.get('title'), year:parseInt(fd.get('year')), category:fd.get('category'), description:fd.get('description'), producer:fd.get('producer') }),
       })
       const data = await res.json()
-      if (data.uploadUrl) showToast(`Movie created! Upload file to Cloudflare: ${data.uploadUrl.slice(0,50)}…`, 'gold')
-      else showToast(data.error||'Upload failed','red')
-    } catch { showToast('Request failed','red') }
-    finally { setUploading(false) }
+      if (!data.bunny_video_guid) { showToast(data.error||'Could not create movie entry','red'); setUploading(false); return }
+
+      // 2. Get a short-lived signed TUS credential for this specific video
+      const authRes = await fetch('/api/admin/tus-auth', {
+        method:'POST', headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({ videoGuid: data.bunny_video_guid }),
+      })
+      const auth = await authRes.json()
+      if (!auth.authorizationSignature) { showToast('Could not authorize upload','red'); setUploading(false); return }
+
+      // 3. Upload the actual file, directly browser-to-Bunny, with real progress
+      const { Upload } = await import('tus-js-client')
+      const upload = new Upload(file, {
+        endpoint: auth.endpoint,
+        retryDelays: [0, 3000, 5000, 10000, 20000],
+        headers: {
+          AuthorizationSignature: auth.authorizationSignature,
+          AuthorizationExpire: String(auth.authorizationExpire),
+          VideoId: auth.videoId,
+          LibraryId: String(auth.libraryId),
+        },
+        metadata: { filetype: file.type, title: fd.get('title') },
+        onError: (err) => {
+          console.error('Upload failed:', err)
+          showToast('Upload failed: ' + err.message, 'red')
+          setUploading(false)
+        },
+        onProgress: (bytesUploaded, bytesTotal) => {
+          setUploadProgress(Math.round((bytesUploaded / bytesTotal) * 100))
+        },
+        onSuccess: async () => {
+          // 4. File genuinely finished uploading — now it's safe to activate.
+          // Bunny may still be encoding for a short while after this; the
+          // movie will simply 404 briefly on playback until encoding catches
+          // up, which is expected for larger files.
+          await fetch('/api/admin/activate-movie', {
+            method:'POST', headers:{'Content-Type':'application/json'},
+            body:JSON.stringify({ movieId: data.movieId }),
+          })
+          showToast(`"${fd.get('title')}" uploaded and live under ${fd.get('category')}!`, 'gold')
+          setUploading(false)
+          setUploadProgress(0)
+          e.target.reset()
+          if (supabase) supabase.from('movies').select('*').order('created_at',{ascending:false}).then(({data})=>{ if(data?.length) setMovies(data) })
+        },
+      })
+
+      upload.findPreviousUploads().then(previous => {
+        if (previous.length) upload.resumeFromPreviousUpload(previous[0])
+        upload.start()
+      })
+    } catch (err) {
+      console.error(err)
+      showToast('Upload failed','red')
+      setUploading(false)
+    }
   }
 
   async function creditLegacyFund() {
@@ -252,8 +310,20 @@ export default function AdminDashboard() {
                   <label style={{display:'block',fontSize:11,fontWeight:600,color:'var(--text2)',marginBottom:6,textTransform:'uppercase',letterSpacing:'.07em'}}>Description</label>
                   <textarea className="form-input" name="description" rows={3} style={{resize:'vertical'}} placeholder="Brief plot description…"/>
                 </div>
-                <button type="submit" className="btn btn-gold" disabled={uploading}>{uploading?'Getting upload URL…':'Create Movie & Get Upload Link'}</button>
-                <p style={{fontSize:12,color:'var(--text3)',marginTop:10}}>After clicking, you get a direct Cloudflare upload URL. Upload your video file there — Cloudflare auto-encodes to SD/HD.</p>
+                <div style={{marginBottom:20}}>
+                  <label style={{display:'block',fontSize:11,fontWeight:600,color:'var(--text2)',marginBottom:6,textTransform:'uppercase',letterSpacing:'.07em'}}>Video File</label>
+                  <input className="form-input" name="videoFile" type="file" accept="video/*" required disabled={uploading} />
+                </div>
+                {uploading && (
+                  <div style={{marginBottom:20}}>
+                    <div style={{height:8,background:'var(--bg3)',borderRadius:4,overflow:'hidden'}}>
+                      <div style={{height:'100%',width:`${uploadProgress}%`,background:'var(--gold)',transition:'width .3s'}} />
+                    </div>
+                    <div style={{fontSize:12,color:'var(--text2)',marginTop:6}}>{uploadProgress}% uploaded — don't close this tab</div>
+                  </div>
+                )}
+                <button type="submit" className="btn btn-gold" disabled={uploading}>{uploading?`Uploading… ${uploadProgress}%`:'Upload Movie'}</button>
+                <p style={{fontSize:12,color:'var(--text3)',marginTop:10}}>Uploads go straight to Bunny.net and become visible in the app as soon as the file finishes uploading.</p>
               </form>
             </div>
           )}

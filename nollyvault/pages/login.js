@@ -8,6 +8,7 @@ export default function Login() {
   const router = useRouter()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
+  const [showPassword, setShowPassword] = useState(false)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
 
@@ -17,7 +18,7 @@ export default function Login() {
     setError('')
     const { error } = await supabase.auth.signInWithPassword({ email, password })
     if (error) { setError(error.message); setLoading(false) }
-    else router.push('/profiles')
+    else router.push(typeof router.query.redirect === 'string' ? router.query.redirect : '/profiles')
   }
 
   return (
@@ -51,9 +52,18 @@ export default function Login() {
             <label style={{display:'block',fontSize:11,fontWeight:600,color:'var(--text2)',marginBottom:6,textTransform:'uppercase',letterSpacing:'.07em'}}>Email</label>
             <input className="form-input" type="email" value={email} onChange={e=>setEmail(e.target.value)} placeholder="your@email.com" required />
           </div>
-          <div style={{marginBottom:14}}>
+          <div style={{marginBottom:6}}>
             <label style={{display:'block',fontSize:11,fontWeight:600,color:'var(--text2)',marginBottom:6,textTransform:'uppercase',letterSpacing:'.07em'}}>Password</label>
-            <input className="form-input" type="password" value={password} onChange={e=>setPassword(e.target.value)} placeholder="••••••••" required />
+            <div style={{position:'relative'}}>
+              <input className="form-input" type={showPassword?'text':'password'} value={password} onChange={e=>setPassword(e.target.value)} placeholder="••••••••" required style={{paddingRight:44}} />
+              <button type="button" onClick={()=>setShowPassword(s=>!s)} aria-label={showPassword?'Hide password':'Show password'}
+                style={{position:'absolute',right:10,top:'50%',transform:'translateY(-50%)',background:'none',border:'none',cursor:'pointer',color:'var(--text3)',fontSize:12,fontWeight:600,padding:4}}>
+                {showPassword?'Hide':'Show'}
+              </button>
+            </div>
+          </div>
+          <div style={{textAlign:'right',marginBottom:14}}>
+            <Link href="/forgot-password"><span style={{fontSize:12,color:'var(--text2)',cursor:'pointer'}}>Forgot password?</span></Link>
           </div>
           {error && <div style={{fontSize:12,color:'var(--red)',marginBottom:12}}>{error}</div>}
           <button type="submit" className="btn btn-gold" disabled={loading} style={{marginTop:4}}>

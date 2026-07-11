@@ -7,6 +7,7 @@ export default function Signup() {
   const supabase = useSupabaseClient()
   const router = useRouter()
   const [form, setForm] = useState({ name: '', email: '', password: '', referralCode: '' })
+  const [showPassword, setShowPassword] = useState(false)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
 
@@ -54,12 +55,22 @@ export default function Signup() {
         <div style={{textAlign:'center',color:'var(--text2)',fontSize:13,marginBottom:30}}>Relive the Golden Era of Nollywood</div>
         <div style={{fontSize:19,fontWeight:600,marginBottom:20}}>Create your account</div>
         <form onSubmit={handleSignup}>
-          {[{k:'name',label:'Full Name',type:'text',ph:'Ada Okafor'},{k:'email',label:'Email',type:'email',ph:'your@email.com'},{k:'password',label:'Password',type:'password',ph:'Min. 8 characters'}].map(f=>(
+          {[{k:'name',label:'Full Name',type:'text',ph:'Ada Okafor'},{k:'email',label:'Email',type:'email',ph:'your@email.com'}].map(f=>(
             <div key={f.k} style={{marginBottom:14}}>
               <label style={{display:'block',fontSize:11,fontWeight:600,color:'var(--text2)',marginBottom:6,textTransform:'uppercase',letterSpacing:'.07em'}}>{f.label}</label>
               <input className="form-input" type={f.type} value={form[f.k]} onChange={set(f.k)} placeholder={f.ph} required />
             </div>
           ))}
+          <div style={{marginBottom:14}}>
+            <label style={{display:'block',fontSize:11,fontWeight:600,color:'var(--text2)',marginBottom:6,textTransform:'uppercase',letterSpacing:'.07em'}}>Password</label>
+            <div style={{position:'relative'}}>
+              <input className="form-input" type={showPassword?'text':'password'} value={form.password} onChange={set('password')} placeholder="Min. 8 characters" required style={{paddingRight:44}} />
+              <button type="button" onClick={()=>setShowPassword(s=>!s)} aria-label={showPassword?'Hide password':'Show password'}
+                style={{position:'absolute',right:10,top:'50%',transform:'translateY(-50%)',background:'none',border:'none',cursor:'pointer',color:'var(--text3)',fontSize:12,fontWeight:600,padding:4}}>
+                {showPassword?'Hide':'Show'}
+              </button>
+            </div>
+          </div>
           <div style={{marginBottom:14}}>
             <label style={{display:'block',fontSize:11,fontWeight:600,color:'var(--text2)',marginBottom:6,textTransform:'uppercase',letterSpacing:'.07em'}}>Referral Code <span style={{color:'var(--text3)',fontWeight:400,textTransform:'none'}}>(optional)</span></label>
             <input className="form-input" type="text" value={form.referralCode} onChange={set('referralCode')} placeholder="e.g. KANAYO2024" style={{textTransform:'uppercase'}} />

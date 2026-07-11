@@ -84,6 +84,30 @@ export async function uploadVideo(videoGuid, fileBuffer) {
 }
 
 /**
+ * Generate a signed TUS upload authorization for a video.
+ * This is Bunny's documented pattern for letting the BROWSER upload large
+ * files directly to Bunny, without ever exposing the permanent
+ * BUNNY_STREAM_KEY to client-side code. The signature is time-limited
+ * (default 1 hour) and only valid for this one specific video.
+ * Docs: https://docs.bunny.net/docs/stream-uploading#tus-resumable-uploads
+ */
+export async function getTusUploadAuth(videoGuid, expiresInSeconds = 3600) {
+  const { createHash } = await import('crypto')
+  const expire = Math.floor(Date.now() / 1000) + expiresInSeconds
+  const signature = createHash('sha256')
+    .update(`${BUNNY_LIBRARY_ID}${BUNNY_STREAM_KEY}${expire}${videoGuid}`)
+    .digest('hex')
+
+  return {
+    endpoint: 'https://video.bunnycdn.com/tusupload',
+    videoId: videoGuid,
+    libraryId: BUNNY_LIBRARY_ID,
+    authorizationSignature: signature,
+    authorizationExpire: expire,
+  }
+}
+
+/**
  * Get video details including encoding status
  * Status: 0=queued, 1=processing, 2=encoding, 3=finished, 4=error
  */
