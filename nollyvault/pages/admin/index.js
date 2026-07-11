@@ -85,9 +85,13 @@ export default function AdminDashboard() {
     // Real subscriber count — replaces the hardcoded "1,247" that never updated
     supabase.from('users').select('id',{count:'exact',head:true}).eq('plan_status','active')
       .then(({count})=>setSubscriberCount(count ?? 0))
-    // Real veteran actor list — replaces MOCK_ACTORS' fake credit amounts
-    supabase.from('veteran_actors').select('*').order('created_at',{ascending:false})
-      .then(({data})=>setVeteranActors(data || []))
+    // Real veteran actor list — fetched via admin API route (service role),
+    // not a direct client query, since veteran_actors is correctly RLS-locked
+    // against direct browser reads. See pages/api/admin/veterans/list.js
+    fetch('/api/admin/veterans/list')
+      .then(r => r.ok ? r.json() : { actors: [] })
+      .then(({ actors }) => setVeteranActors(actors))
+      .catch(() => setVeteranActors([]))
   }, [supabase])
 
   async function handleUpload(e) {
