@@ -55,6 +55,13 @@ const TIERS = [
   },
 ]
 
+function pctOff(original, current) {
+  const o = Number(String(original).replace(/[^\d]/g, ''))
+  const c = Number(String(current).replace(/[^\d]/g, ''))
+  if (!o || !c) return null
+  return Math.round(((o - c) / o) * 100)
+}
+
 export default function Pricing() {
   const session = useSession()
   const router = useRouter()
@@ -88,8 +95,8 @@ export default function Pricing() {
         .btn{display:inline-flex;align-items:center;justify-content:center;gap:7px;padding:10px 20px;border-radius:var(--radius);font-size:14px;font-weight:600;cursor:pointer;border:none;transition:.2s;font-family:inherit;width:100%;}
         .btn:disabled{opacity:.5;cursor:not-allowed;}
         .card{background:var(--bg2);border:1px solid var(--bg4);border-radius:var(--radius-lg);}
-        .slash{text-decoration:line-through;color:var(--text3);font-size:16px;font-weight:400;margin-right:8px;}
-        .discount-badge{background:rgba(74,206,138,0.15);border:1px solid rgba(74,206,138,0.3);color:var(--green);font-size:10px;font-weight:700;padding:2px 8px;border-radius:20px;text-transform:uppercase;letter-spacing:.06em;margin-left:6px;vertical-align:middle;}
+        .slash{text-decoration:line-through;text-decoration-color:#e84a4a;text-decoration-thickness:2px;color:#8a6a6a;font-size:17px;font-weight:500;margin-right:8px;}
+        .discount-badge{background:linear-gradient(135deg,rgba(232,119,74,0.2),rgba(232,74,74,0.2));border:1px solid rgba(232,119,74,0.4);color:#f0a878;font-size:11px;font-weight:800;padding:3px 10px;border-radius:20px;text-transform:uppercase;letter-spacing:.06em;margin-left:6px;vertical-align:middle;}
       `}</style>
 
       <div style={{minHeight:'100vh',background:'var(--bg)',backgroundImage:'radial-gradient(ellipse at 50% 20%,rgba(200,168,75,0.07) 0%,transparent 60%)'}}>
@@ -112,10 +119,15 @@ export default function Pricing() {
           {/* Tiers */}
           <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(260px,1fr))',gap:16,marginBottom:40}}>
             {TIERS.map(tier=>(
-              <div key={tier.key} className="card" style={{padding:'28px 24px',position:'relative',borderColor:tier.popular?'var(--gold)':'var(--bg4)',transition:'transform .2s'}}
+              <div key={tier.key} className="card" style={{padding:'28px 24px',position:'relative',borderColor:tier.popular?'var(--gold)':(tier.originalNGN?'#e8774a':'var(--bg4)'),borderWidth:tier.originalNGN?2:1,transition:'transform .2s',boxShadow:tier.originalNGN?'0 0 24px rgba(232,119,74,0.15)':'none'}}
                 onMouseEnter={e=>e.currentTarget.style.transform='translateY(-4px)'}
                 onMouseLeave={e=>e.currentTarget.style.transform='translateY(0)'}>
                 {tier.popular&&<div style={{position:'absolute',top:-11,left:'50%',transform:'translateX(-50%)',background:'var(--gold)',color:'#000',fontSize:10,fontWeight:800,padding:'3px 14px',borderRadius:20,whiteSpace:'nowrap',textTransform:'uppercase',letterSpacing:'.08em'}}>Most Popular</div>}
+                {tier.originalNGN && (
+                  <div style={{position:'absolute',top:-12,right:14,background:'linear-gradient(135deg,#e8774a,#e84a4a)',color:'#fff',fontSize:11,fontWeight:800,padding:'5px 12px',borderRadius:20,whiteSpace:'nowrap',boxShadow:'0 3px 12px rgba(232,74,74,0.4)',display:'flex',alignItems:'center',gap:4}}>
+                    🔥 Save {pctOff(tier.originalNGN, tier.priceNGN)}%
+                  </div>
+                )}
 
                 <div style={{fontSize:12,fontWeight:600,color:'var(--text2)',textTransform:'uppercase',letterSpacing:'.09em',marginBottom:10}}>{tier.name}</div>
 
