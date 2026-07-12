@@ -4,8 +4,13 @@ import { createBrowserClient, createServerClient } from '@supabase/ssr'
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
 
-// ── Browser client (use in React components / hooks) ──────────────────────────
-export const supabase = createClient(supabaseUrl, supabaseAnonKey)
+// Note: no top-level singleton client here on purpose. A previous version
+// had `export const supabase = createClient(...)` at module scope — nothing
+// actually imported it by name, but merely importing this file (which every
+// page does, for the functions below) ran that line anyway as a side effect,
+// silently creating a second, redundant auth client in the browser alongside
+// the real one from createBrowserSupabaseClient(). That's what caused the
+// "Multiple GoTrueClient instances detected" console warning.
 
 // ── Browser client via SSR package (preferred in pages) ──────────────────────
 export function createBrowserSupabaseClient() {

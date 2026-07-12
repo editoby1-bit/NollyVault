@@ -1,6 +1,6 @@
 // pages/api/admin/upload-url.js
 // Creates a new video in Bunny.net library and returns upload details
-import { createServerSupabaseClient } from '../../../lib/supabase'
+import { createServerSupabaseClient, supabaseAdmin } from '../../../lib/supabase'
 import { createVideo } from '../../../lib/bunny'
 
 const ADMIN_EMAILS = (process.env.ADMIN_EMAILS || '').split(',').map(e => e.trim()).filter(Boolean)
@@ -42,7 +42,8 @@ export default async function handler(req, res) {
       is_active: false,
     }
 
-    const { data: inserted, error: insertErr } = await supabase.from(table).insert(insertData).select('id').single()
+    const sb = supabaseAdmin()
+    const { data: inserted, error: insertErr } = await sb.from(table).insert(insertData).select('id').single()
     if (insertErr) throw insertErr
 
     return res.json({
