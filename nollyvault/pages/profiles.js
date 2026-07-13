@@ -59,7 +59,7 @@ export default function Profiles() {
 
       <div style={{fontFamily:"'Playfair Display',serif",fontSize:24,fontWeight:900,color:'var(--gold)'}}>Naija<span style={{color:'var(--text)'}}>Rewind</span></div>
       <h1 style={{fontFamily:"'Playfair Display',serif",fontSize:32,fontWeight:900,marginTop:20,marginBottom:6,textAlign:'center'}}>Who's watching?</h1>
-      <p style={{color:'var(--text2)',fontSize:14,marginBottom:40,textAlign:'center'}}>Each profile has its own watchlist and viewing history</p>
+      <p style={{color:'var(--text2)',fontSize:14,marginBottom:40,textAlign:'center'}}>Pick a profile — or add one for each person in your household. Each profile keeps its own watchlist and "continue watching" separate, so nobody's viewing history gets mixed up with anyone else's.</p>
 
       <div style={{display:'flex',gap:24,flexWrap:'wrap',justifyContent:'center',marginBottom:40}}>
         {profiles.map(p=>(
@@ -86,7 +86,7 @@ export default function Profiles() {
 
       {adding && (
         <div style={{display:'flex',gap:10,alignItems:'center',marginBottom:24}}>
-          <input className="form-input" style={{width:200}} value={newName} onChange={e=>setNewName(e.target.value)} placeholder="Profile name" autoFocus onKeyDown={e=>e.key==='Enter'&&addProfile()} />
+          <input className="form-input" style={{width:200}} value={newName} onChange={e=>setNewName(e.target.value)} placeholder="e.g. Mum, Dad, your name…" autoFocus onKeyDown={e=>e.key==='Enter'&&addProfile()} />
           <button className="btn btn-gold" onClick={addProfile}>Add</button>
           <button className="btn btn-ghost" onClick={()=>setAdding(false)}>Cancel</button>
         </div>
