@@ -74,13 +74,12 @@ export default function WatchPage() {
         setResumeSeconds(resumeAt)
         setShowResumePrompt(true)
         resumeTimeoutRef.current = setTimeout(() => setShowResumePrompt(false), 6000)
-        // Bunny's embed player accepts a `t` query param (seconds) to start
-        // playback at a specific position.
-        setStreamUrl(`${data.streamUrl}&t=${Math.floor(resumeAt)}`)
         currentTimeRef.current = resumeAt
-      } else {
-        setStreamUrl(data.streamUrl)
       }
+      // Append a unique param so this iframe's src is never identical to a
+      // previous one on the same page — player.js's own docs warn that
+      // duplicate srcs across players can cause event delivery to misfire.
+      setStreamUrl(`${data.streamUrl}&_s=${Date.now()}`)
     } catch (e) {
       setError(e.message)
     } finally {
@@ -92,29 +91,54 @@ export default function WatchPage() {
     clearTimeout(resumeTimeoutRef.current)
     setShowResumePrompt(false)
     currentTimeRef.current = 0
-    // Rebuild the stream URL without the t= param, forcing a fresh iframe
-    // load from the start.
-    setStreamUrl(url => url ? url.replace(/&t=\d+/, '') : url)
+    setResumeSeconds(0)
+    if (playerRef.current) playerRef.current.setCurrentTime(0)
   }
 
-  // Listen for playback position updates from Bunny's embed player, so
-  // real progress gets saved instead of always writing 0. Bunny's iframe
-  // player posts messages on playback events — this listens defensively
-  // for the common field names their player uses. Worth confirming in
-  // browser devtools (Console, filter for "message" events) that these
-  // are firing as expected, since this depends on Bunny's exact player
-  // version behaving as documented.
+  // Bunny Stream's embed player uses the player.js library for programmatic
+  // control and events — it does NOT just broadcast raw postMessage data to
+  // any listener (that was the wrong assumption last time, which is why
+  // resume silently did nothing). This loads the real library from Bunny's
+  // CDN, attaches it to the iframe once both are ready, seeks to the saved
+  // position on 'ready', and tracks real position via 'timeupdate'.
+  // Docs: https://docs.bunny.net/docs/playback-control-api
+  const iframeRef = useRef(null)
+  const playerRef = useRef(null)
+
   useEffect(() => {
-    function handleMessage(e) {
-      if (!e.origin || !e.origin.includes('mediadelivery.net')) return
-      const d = e.data
-      if (!d) return
-      const t = d.currentTime ?? d.time ?? d?.data?.currentTime
-      if (typeof t === 'number') currentTimeRef.current = t
+    if (!streamUrl) return
+    let cancelled = false
+
+    function attachPlayer() {
+      if (cancelled || !iframeRef.current || !window.playerjs) return
+      const player = new window.playerjs.Player(iframeRef.current)
+      playerRef.current = player
+      player.on('ready', () => {
+        if (resumeSeconds > 0) player.setCurrentTime(resumeSeconds)
+        player.on('timeupdate', (data) => {
+          const t = typeof data === 'number' ? data : (data?.seconds ?? data?.currentTime)
+          if (typeof t === 'number') currentTimeRef.current = t
+        })
+      })
     }
-    window.addEventListener('message', handleMessage)
-    return () => window.removeEventListener('message', handleMessage)
-  }, [])
+
+    if (window.playerjs) {
+      attachPlayer()
+    } else {
+      const existing = document.getElementById('bunny-playerjs')
+      if (!existing) {
+        const script = document.createElement('script')
+        script.id = 'bunny-playerjs'
+        script.src = '//assets.mediadelivery.net/playerjs/playerjs-latest.min.js'
+        script.onload = attachPlayer
+        document.head.appendChild(script)
+      } else {
+        existing.addEventListener('load', attachPlayer)
+      }
+    }
+
+    return () => { cancelled = true }
+  }, [streamUrl])
 
   useEffect(() => {
     if (!streamUrl || !session) return
@@ -187,7 +211,7 @@ export default function WatchPage() {
 
       {(!showPreRoll || !shouldShowAds) && streamUrl && (
         <div style={{ position: 'fixed', inset: 0, background: '#000', cursor: showControls ? 'default' : 'none' }} onMouseMove={resetControls}>
-          <iframe src={streamUrl} style={{ width: '100%', height: '100%', border: 'none' }} allow="accelerometer; gyroscope; autoplay; encrypted-media; picture-in-picture" allowFullScreen title={movie?.title} />
+          <iframe ref={iframeRef} src={streamUrl} style={{ width: '100%', height: '100%', border: 'none' }} allow="autoplay; accelerometer; gyroscope; encrypted-media; picture-in-picture" allowFullScreen title={movie?.title} />
 
           {showResumePrompt && (
             <div style={{

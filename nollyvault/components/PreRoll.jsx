@@ -11,16 +11,7 @@ const MOCK_PREROLL = [
     brand: 'Peak Milk',
     youtube_video_id: null,
     duration_seconds: 15,
-    skip_after: 5, // matches YouTube TrueView standard — was non-skippable at 30s, longer than typical industry practice
-  },
-  {
-    id: 'retro-1',
-    slot_type: 'retro_commercial',
-    title: 'Indomie Super Pack — "Mama, I Want Indomie"',
-    brand: 'Indomie',
-    youtube_video_id: null,
-    duration_seconds: 15,
-    skip_after: 5,
+    skip_after: 5, // matches YouTube TrueView standard
   },
   {
     id: 'trailer-1',
@@ -29,12 +20,16 @@ const MOCK_PREROLL = [
     brand: null,
     youtube_video_id: null,
     duration_seconds: 30,
-    skip_after: 5,
+    skip_after: 0, // instantly skippable — a nostalgic bonus, not forced friction. See note below.
   },
 ]
-// Total pod: 60s, all skippable after 5s — was 120s with 2 of 3 slots
-// completely unskippable, longer than most streaming platforms' ad-supported
-// FREE tiers use, let alone what's reasonable for paying subscribers.
+// Down from 3 ads (120s, mostly unskippable) to 2 (45s max, both skippable).
+// The vintage trailer reel is a genuinely nice touch, but forcing it on
+// repeat viewers every single time turns a delightful detail into
+// friction. Making it instantly skippable means people who enjoy it can
+// let it play, and everyone else self-selects out in one click — the
+// "cool factor" survives without being annoying to your most frequent,
+// most valuable users.
 
 export default function PreRoll({ movieTitle, onComplete, onSkipAll, isAdminPreview }) {
   const [currentSlot, setCurrentSlot] = useState(0)
@@ -55,9 +50,9 @@ export default function PreRoll({ movieTitle, onComplete, onSkipAll, isAdminPrev
   useEffect(() => {
     if (!slot) { onComplete?.(); return }
 
-    setCanSkip(false)
+    setCanSkip(slot.skip_after === 0)
     setCountdown(slot.duration_seconds)
-    setSkipCountdown(slot.skip_after || null)
+    setSkipCountdown(slot.skip_after > 0 ? slot.skip_after : null)
 
     // Total ad-time countdown
     timerRef.current = setInterval(() => {
@@ -74,8 +69,10 @@ export default function PreRoll({ movieTitle, onComplete, onSkipAll, isAdminPrev
     // Separate "skip available in Xs" countdown — ticks down independently
     // so the person watching sees exactly how long until they can skip,
     // not just the total ad length (this is the actual psychological hook
-    // YouTube-style skip countdowns use).
-    if (slot.skip_after) {
+    // YouTube-style skip countdowns use). Only runs for slots with a real
+    // delay (skip_after > 0) — instantly-skippable slots (skip_after: 0)
+    // are already handled by canSkip being set true above.
+    if (slot.skip_after > 0) {
       skipTimerRef.current = setInterval(() => {
         setSkipCountdown(s => {
           if (s <= 1) {
