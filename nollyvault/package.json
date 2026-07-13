@@ -15,7 +15,7 @@
     "react": "^18",
     "react-dom": "^18",
     "tus-js-client": "^4.1.0",
-    "vercel": "^55.0.0"
+    "vercel": "^54.11.1"
   },
   "devDependencies": {
     "eslint": "^9",

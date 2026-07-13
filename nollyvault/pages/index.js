@@ -24,6 +24,11 @@ const FAQS = [
   { q: 'What is a Watch Party?', a: 'A Watch Party lets you and friends or family watch the same movie in sync, from different locations. Chat alongside. Pause together. Available on the Family & Friends plan.' },
 ]
 
+// Flip NEXT_PUBLIC_LAUNCHED=true in Vercel env vars once real movies are live
+// and you're ready to accept real signups. This swaps the waitlist form for
+// a real Get Started flow, no code changes needed on launch day.
+const LAUNCHED = process.env.NEXT_PUBLIC_LAUNCHED === 'true'
+
 export default function Landing() {
   const router = useRouter()
   const [email, setEmail] = useState('')
@@ -125,7 +130,14 @@ export default function Landing() {
 
         {/* Waitlist / CTA */}
         <div className="fade-up" style={{animationDelay:'.4s'}}>
-          {submitted ? (
+          {LAUNCHED ? (
+            <div style={{display:'flex',gap:12,flexWrap:'wrap',justifyContent:'center'}}>
+              <Link href="/signup"><button className="btn btn-gold" style={{fontSize:16,padding:'14px 32px'}}>
+                Get Started
+                <svg viewBox="0 0 24 24" width={16} height={16} fill="currentColor"><path d="M12 4l-1.41 1.41L16.17 11H4v2h12.17l-5.58 5.59L12 20l8-8z"/></svg>
+              </button></Link>
+            </div>
+          ) : submitted ? (
             <div style={{
               background:'rgba(74,206,138,0.1)',border:'1px solid rgba(74,206,138,0.3)',
               borderRadius:12,padding:'16px 28px',fontSize:15,color:'var(--green)',
@@ -156,7 +168,10 @@ export default function Landing() {
 
         {/* Social proof */}
         <div className="fade-up" style={{marginTop:48,display:'flex',gap:32,flexWrap:'wrap',justifyContent:'center',animationDelay:'.5s'}}>
-          {[['2,000+','on the waitlist'],['50+','classic movies'],['90s–2000s','golden era'],].map(([val,lab])=>(
+          {(LAUNCHED
+            ? [['50+','classic movies'],['90s–2000s','golden era'],['10%','to the Legacy Fund']]
+            : [['2,000+','on the waitlist'],['50+','classic movies'],['90s–2000s','golden era']]
+          ).map(([val,lab])=>(
             <div key={lab} style={{textAlign:'center'}}>
               <div style={{fontFamily:"'Playfair Display',serif",fontSize:28,fontWeight:900,color:'var(--gold)'}}>{val}</div>
               <div style={{fontSize:13,color:'var(--text3)',marginTop:2}}>{lab}</div>
@@ -459,7 +474,9 @@ export default function Landing() {
           The classics deserve<br/>a proper home.
         </h2>
         <p style={{fontSize:16,color:'var(--text2)',marginBottom:36,maxWidth:420,margin:'0 auto 36px'}}>
-          Join thousands of Nigerians and diaspora members already on the waitlist.
+          {LAUNCHED
+            ? 'Join Nigerians and diaspora members already streaming the classics.'
+            : 'Join thousands of Nigerians and diaspora members already on the waitlist.'}
         </p>
         <Link href="/signup">
           <button className="btn btn-gold" style={{fontSize:16,padding:'14px 32px'}}>

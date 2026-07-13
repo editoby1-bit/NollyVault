@@ -34,7 +34,7 @@ export default function WatchPage() {
       const res = await fetch('/api/stream/' + movieId)
       const data = await res.json()
       if (!res.ok) {
-        if (data.redirect) { router.push(data.redirect); return }
+        if (data.redirect) { router.replace(data.redirect); return }
         throw new Error(data.error)
       }
       setStreamUrl(data.streamUrl)
@@ -93,7 +93,15 @@ export default function WatchPage() {
         .ctrl-btn:hover{color:#c8a84b;}
       `}</style>
 
-      {showPreRoll && (
+      {loading && !streamUrl && (
+        <div style={{ position: 'fixed', inset: 0, background: '#000', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 16 }}>
+          <div style={{ width: 32, height: 32, border: '3px solid #2a2a2a', borderTopColor: '#c8a84b', borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />
+          <div style={{ color: '#5a5550', fontSize: 13 }}>Checking access…</div>
+          <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
+        </div>
+      )}
+
+      {showPreRoll && streamUrl && (
         <PreRoll
           movieTitle={movie?.title}
           userPlan={userPlan}
@@ -102,16 +110,9 @@ export default function WatchPage() {
         />
       )}
 
-      {!showPreRoll && (
+      {!showPreRoll && streamUrl && (
         <div style={{ position: 'fixed', inset: 0, background: '#000', cursor: showControls ? 'default' : 'none' }} onMouseMove={resetControls}>
-          {streamUrl ? (
-            <iframe src={streamUrl} style={{ width: '100%', height: '100%', border: 'none' }} allow="accelerometer; gyroscope; autoplay; encrypted-media; picture-in-picture" allowFullScreen title={movie?.title} />
-          ) : (
-            <div style={{ width: '100%', height: '100%', background: 'radial-gradient(ellipse at center, #1a0f00 0%, #000 100%)', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 20 }}>
-              <div style={{ opacity: 0.3, fontSize: 80 }}>🎬</div>
-              <div style={{ color: '#5a5550', fontSize: 14, textAlign: 'center', maxWidth: 360 }}>Connect Bunny.net to enable streaming. See README.md</div>
-            </div>
-          )}
+          <iframe src={streamUrl} style={{ width: '100%', height: '100%', border: 'none' }} allow="accelerometer; gyroscope; autoplay; encrypted-media; picture-in-picture" allowFullScreen title={movie?.title} />
 
           <div style={{ position: 'absolute', inset: 0, pointerEvents: 'none', opacity: showControls ? 1 : 0, transition: 'opacity 0.4s ease' }}>
             <div style={{ position: 'absolute', top: 0, left: 0, right: 0, background: 'linear-gradient(to bottom, rgba(0,0,0,0.85), transparent)', padding: '16px 24px', display: 'flex', alignItems: 'center', gap: 14, pointerEvents: 'all' }}>
