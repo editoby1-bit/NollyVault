@@ -138,7 +138,7 @@ export default function WatchPage() {
     }
 
     return () => { cancelled = true }
-  }, [streamUrl])
+  }, [streamUrl, showPreRoll, shouldShowAds])
 
   useEffect(() => {
     if (!streamUrl || !session) return

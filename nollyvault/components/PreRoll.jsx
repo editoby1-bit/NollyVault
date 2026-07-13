@@ -247,7 +247,7 @@ export default function PreRoll({ movieTitle, onComplete, onSkipAll, isAdminPrev
                 fontFamily: 'inherit', display: 'flex', alignItems: 'center', gap: 6,
               }}
             >
-              Skip Ad →
+              {currentSlot === slots.length - 1 ? 'Skip to Movie →' : 'Skip Ad →'}
             </button>
           ) : skipCountdown !== null ? (
             <div style={{
@@ -255,7 +255,7 @@ export default function PreRoll({ movieTitle, onComplete, onSkipAll, isAdminPrev
               color: '#9a9590', fontSize: 13, fontWeight: 500,
               padding: '8px 14px', borderRadius: 6, minWidth: 110, textAlign: 'center',
             }}>
-              Skip in {skipCountdown}s
+              {currentSlot === slots.length - 1 ? `Skip to movie in ${skipCountdown}s` : `Skip in ${skipCountdown}s`}
             </div>
           ) : (
             <div style={{
