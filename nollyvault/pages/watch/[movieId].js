@@ -17,6 +17,9 @@ export default function WatchPage() {
   const [showPreRoll, setShowPreRoll] = useState(true)
   const [showControls, setShowControls] = useState(true)
   const [userPlan, setUserPlan] = useState('classic')
+  const [isAdmin, setIsAdmin] = useState(false)
+  const [resumeSeconds, setResumeSeconds] = useState(0)
+  const [showResumePrompt, setShowResumePrompt] = useState(false)
   const controlsTimer = useRef(null)
 
   useEffect(() => {
@@ -24,9 +27,22 @@ export default function WatchPage() {
     if (session && supabase) {
       supabase.from('users').select('plan').eq('id', session.user.id).single()
         .then(({ data }) => { if (data?.plan) setUserPlan(data.plan) })
+      // Admin accounts always see the real ad experience regardless of their
+      // own plan, so ad behavior can actually be monitored/QA'd — real
+      // premium/family subscribers see zero ads, no exceptions.
+      fetch('/api/admin/whoami').then(r => r.ok ? r.json() : { isAdmin: false })
+        .then(({ isAdmin }) => setIsAdmin(isAdmin)).catch(() => {})
     }
     fetchStream()
   }, [movieId, session])
+
+  // Premium/family users skip the pre-roll entirely — unless this is an
+  // admin account deliberately watching ads to check ad behavior.
+  const isPremiumPlan = userPlan === 'premium' || userPlan === 'family'
+  const shouldShowAds = isAdmin || !isPremiumPlan
+
+  const currentTimeRef = useRef(0)
+  const resumeTimeoutRef = useRef(null)
 
   async function fetchStream() {
     setLoading(true)
@@ -37,8 +53,34 @@ export default function WatchPage() {
         if (data.redirect) { router.replace(data.redirect); return }
         throw new Error(data.error)
       }
-      setStreamUrl(data.streamUrl)
       setMovie({ title: data.title, duration: data.duration_seconds })
+
+      // Check for saved progress on this movie for this profile, so we can
+      // resume instead of always restarting from 0.
+      const profile = JSON.parse(sessionStorage.getItem('activeProfile') || '{}')
+      let resumeAt = 0
+      if (profile?.id) {
+        try {
+          const progRes = await fetch(`/api/progress?profileId=${profile.id}&movieId=${movieId}`)
+          const progData = await progRes.json()
+          const saved = progData?.progress?.progress_seconds || 0
+          // Don't bother resuming for the first ~15s in — that's basically
+          // the start anyway, not worth prompting about.
+          if (saved > 15 && !progData?.progress?.completed) resumeAt = saved
+        } catch {}
+      }
+
+      if (resumeAt > 0) {
+        setResumeSeconds(resumeAt)
+        setShowResumePrompt(true)
+        resumeTimeoutRef.current = setTimeout(() => setShowResumePrompt(false), 6000)
+        // Bunny's embed player accepts a `t` query param (seconds) to start
+        // playback at a specific position.
+        setStreamUrl(`${data.streamUrl}&t=${Math.floor(resumeAt)}`)
+        currentTimeRef.current = resumeAt
+      } else {
+        setStreamUrl(data.streamUrl)
+      }
     } catch (e) {
       setError(e.message)
     } finally {
@@ -46,13 +88,45 @@ export default function WatchPage() {
     }
   }
 
+  function restartFromBeginning() {
+    clearTimeout(resumeTimeoutRef.current)
+    setShowResumePrompt(false)
+    currentTimeRef.current = 0
+    // Rebuild the stream URL without the t= param, forcing a fresh iframe
+    // load from the start.
+    setStreamUrl(url => url ? url.replace(/&t=\d+/, '') : url)
+  }
+
+  // Listen for playback position updates from Bunny's embed player, so
+  // real progress gets saved instead of always writing 0. Bunny's iframe
+  // player posts messages on playback events — this listens defensively
+  // for the common field names their player uses. Worth confirming in
+  // browser devtools (Console, filter for "message" events) that these
+  // are firing as expected, since this depends on Bunny's exact player
+  // version behaving as documented.
+  useEffect(() => {
+    function handleMessage(e) {
+      if (!e.origin || !e.origin.includes('mediadelivery.net')) return
+      const d = e.data
+      if (!d) return
+      const t = d.currentTime ?? d.time ?? d?.data?.currentTime
+      if (typeof t === 'number') currentTimeRef.current = t
+    }
+    window.addEventListener('message', handleMessage)
+    return () => window.removeEventListener('message', handleMessage)
+  }, [])
+
   useEffect(() => {
     if (!streamUrl || !session) return
     const profile = JSON.parse(sessionStorage.getItem('activeProfile') || '{}')
     const timer = setInterval(async () => {
       await fetch('/api/progress', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ movieId, profileId: profile.id, progressSeconds: 0 }),
+        body: JSON.stringify({
+          movieId, profileId: profile.id,
+          progressSeconds: Math.floor(currentTimeRef.current),
+          completed: movie?.duration ? currentTimeRef.current >= movie.duration - 5 : false,
+        }),
       })
     }, 30000)
     return () => clearInterval(timer)
@@ -91,6 +165,7 @@ export default function WatchPage() {
         body{font-family:'DM Sans',sans-serif;background:#000;color:#f0ede6;}
         .ctrl-btn{background:transparent;border:none;color:#9a9590;cursor:pointer;padding:6px;display:flex;align-items:center;transition:color .2s;font-family:inherit;}
         .ctrl-btn:hover{color:#c8a84b;}
+        @keyframes fadeIn{from{opacity:0;transform:translate(-50%,8px)}to{opacity:1;transform:translate(-50%,0)}}
       `}</style>
 
       {loading && !streamUrl && (
@@ -101,18 +176,39 @@ export default function WatchPage() {
         </div>
       )}
 
-      {showPreRoll && streamUrl && (
+      {showPreRoll && shouldShowAds && streamUrl && (
         <PreRoll
           movieTitle={movie?.title}
-          userPlan={userPlan}
+          isAdminPreview={isAdmin && isPremiumPlan}
           onComplete={() => setShowPreRoll(false)}
           onSkipAll={() => setShowPreRoll(false)}
         />
       )}
 
-      {!showPreRoll && streamUrl && (
+      {(!showPreRoll || !shouldShowAds) && streamUrl && (
         <div style={{ position: 'fixed', inset: 0, background: '#000', cursor: showControls ? 'default' : 'none' }} onMouseMove={resetControls}>
           <iframe src={streamUrl} style={{ width: '100%', height: '100%', border: 'none' }} allow="accelerometer; gyroscope; autoplay; encrypted-media; picture-in-picture" allowFullScreen title={movie?.title} />
+
+          {showResumePrompt && (
+            <div style={{
+              position: 'absolute', bottom: 90, left: '50%', transform: 'translateX(-50%)',
+              background: 'rgba(0,0,0,0.85)', border: '1px solid rgba(255,255,255,0.15)',
+              borderRadius: 10, padding: '12px 18px', display: 'flex', alignItems: 'center', gap: 14,
+              animation: 'fadeIn 0.3s ease',
+            }}>
+              <span style={{ fontSize: 13, color: '#f0ede6' }}>Resuming from where you left off</span>
+              <button
+                onClick={restartFromBeginning}
+                style={{
+                  background: 'rgba(200,168,75,0.15)', border: '1px solid rgba(200,168,75,0.4)',
+                  color: '#c8a84b', fontSize: 12, fontWeight: 600,
+                  padding: '5px 12px', borderRadius: 6, cursor: 'pointer', fontFamily: 'inherit', whiteSpace: 'nowrap',
+                }}
+              >
+                Start from the beginning?
+              </button>
+            </div>
+          )}
 
           <div style={{ position: 'absolute', inset: 0, pointerEvents: 'none', opacity: showControls ? 1 : 0, transition: 'opacity 0.4s ease' }}>
             <div style={{ position: 'absolute', top: 0, left: 0, right: 0, background: 'linear-gradient(to bottom, rgba(0,0,0,0.85), transparent)', padding: '16px 24px', display: 'flex', alignItems: 'center', gap: 14, pointerEvents: 'all' }}>

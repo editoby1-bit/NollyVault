@@ -10,8 +10,8 @@ const MOCK_PREROLL = [
     title: 'This film is brought to you by Peak Milk',
     brand: 'Peak Milk',
     youtube_video_id: null,
-    duration_seconds: 30,
-    skip_after: null, // not skippable on Classic
+    duration_seconds: 15,
+    skip_after: 5, // matches YouTube TrueView standard — was non-skippable at 30s, longer than typical industry practice
   },
   {
     id: 'retro-1',
@@ -19,8 +19,8 @@ const MOCK_PREROLL = [
     title: 'Indomie Super Pack — "Mama, I Want Indomie"',
     brand: 'Indomie',
     youtube_video_id: null,
-    duration_seconds: 30,
-    skip_after: null,
+    duration_seconds: 15,
+    skip_after: 5,
   },
   {
     id: 'trailer-1',
@@ -28,24 +28,28 @@ const MOCK_PREROLL = [
     title: 'Now Showing — Karishika',
     brand: null,
     youtube_video_id: null,
-    duration_seconds: 60,
-    skip_after: 5, // can skip after 5s
+    duration_seconds: 30,
+    skip_after: 5,
   },
 ]
+// Total pod: 60s, all skippable after 5s — was 120s with 2 of 3 slots
+// completely unskippable, longer than most streaming platforms' ad-supported
+// FREE tiers use, let alone what's reasonable for paying subscribers.
 
-export default function PreRoll({ movieTitle, userPlan, onComplete, onSkipAll }) {
+export default function PreRoll({ movieTitle, onComplete, onSkipAll, isAdminPreview }) {
   const [currentSlot, setCurrentSlot] = useState(0)
   const [countdown, setCountdown] = useState(0)
+  const [skipCountdown, setSkipCountdown] = useState(null)
   const [canSkip, setCanSkip] = useState(false)
-  const [showSkipAll, setShowSkipAll] = useState(false)
   const timerRef = useRef(null)
   const skipTimerRef = useRef(null)
 
-  const isPremium = userPlan === 'premium' || userPlan === 'family'
-  const slots = isPremium
-    ? MOCK_PREROLL.filter(s => s.slot_type !== 'brand_sponsor') // Premium sees no brand ads
-    : MOCK_PREROLL
-
+  // Premium/family users never render this component at all now — that
+  // decision is made by the parent page before PreRoll ever mounts, so
+  // ad-serving logic lives in one place. isAdminPreview is only true when an
+  // admin account is deliberately watching ads to QA the ad experience,
+  // regardless of their own plan.
+  const slots = MOCK_PREROLL
   const slot = slots[currentSlot]
 
   useEffect(() => {
@@ -53,8 +57,9 @@ export default function PreRoll({ movieTitle, userPlan, onComplete, onSkipAll })
 
     setCanSkip(false)
     setCountdown(slot.duration_seconds)
+    setSkipCountdown(slot.skip_after || null)
 
-    // Countdown timer
+    // Total ad-time countdown
     timerRef.current = setInterval(() => {
       setCountdown(c => {
         if (c <= 1) {
@@ -66,21 +71,26 @@ export default function PreRoll({ movieTitle, userPlan, onComplete, onSkipAll })
       })
     }, 1000)
 
-    // Skip availability
+    // Separate "skip available in Xs" countdown — ticks down independently
+    // so the person watching sees exactly how long until they can skip,
+    // not just the total ad length (this is the actual psychological hook
+    // YouTube-style skip countdowns use).
     if (slot.skip_after) {
-      skipTimerRef.current = setTimeout(() => {
-        setCanSkip(true)
-      }, slot.skip_after * 1000)
-    }
-
-    // Show "skip all" for Premium after 3 seconds
-    if (isPremium) {
-      setTimeout(() => setShowSkipAll(true), 3000)
+      skipTimerRef.current = setInterval(() => {
+        setSkipCountdown(s => {
+          if (s <= 1) {
+            clearInterval(skipTimerRef.current)
+            setCanSkip(true)
+            return 0
+          }
+          return s - 1
+        })
+      }, 1000)
     }
 
     return () => {
       clearInterval(timerRef.current)
-      clearTimeout(skipTimerRef.current)
+      clearInterval(skipTimerRef.current)
     }
   }, [currentSlot])
 
@@ -219,8 +229,18 @@ export default function PreRoll({ movieTitle, userPlan, onComplete, onSkipAll })
           position: 'absolute', bottom: 20, right: 20,
           display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 8,
         }}>
-          {/* Skip button */}
-          {canSkip && (
+          {isAdminPreview && (
+            <div style={{
+              background: 'rgba(200,168,75,0.15)', border: '1px solid rgba(200,168,75,0.4)',
+              color: '#c8a84b', fontSize: 11, fontWeight: 600,
+              padding: '4px 10px', borderRadius: 6,
+            }}>
+              👁 Admin ad preview
+            </div>
+          )}
+
+          {/* Skip button — replaces the countdown the instant it hits zero */}
+          {canSkip ? (
             <button
               onClick={advanceSlot}
               style={{
@@ -230,27 +250,17 @@ export default function PreRoll({ movieTitle, userPlan, onComplete, onSkipAll })
                 fontFamily: 'inherit', display: 'flex', alignItems: 'center', gap: 6,
               }}
             >
-              Skip →
+              Skip Ad →
             </button>
-          )}
-
-          {/* Skip all for Premium */}
-          {showSkipAll && isPremium && (
-            <button
-              onClick={onSkipAll || onComplete}
-              style={{
-                background: 'rgba(200,168,75,0.15)', border: '1px solid rgba(200,168,75,0.4)',
-                color: '#c8a84b', fontSize: 12, fontWeight: 500,
-                padding: '6px 14px', borderRadius: 6, cursor: 'pointer',
-                fontFamily: 'inherit',
-              }}
-            >
-              Skip all ads (Premium)
-            </button>
-          )}
-
-          {/* Countdown — shown when not skippable */}
-          {!canSkip && !isPremium && (
+          ) : skipCountdown !== null ? (
+            <div style={{
+              background: 'rgba(0,0,0,0.75)', border: '1px solid rgba(255,255,255,0.1)',
+              color: '#9a9590', fontSize: 13, fontWeight: 500,
+              padding: '8px 14px', borderRadius: 6, minWidth: 110, textAlign: 'center',
+            }}>
+              Skip in {skipCountdown}s
+            </div>
+          ) : (
             <div style={{
               background: 'rgba(0,0,0,0.75)', border: '1px solid rgba(255,255,255,0.1)',
               color: '#9a9590', fontSize: 13, fontWeight: 500,

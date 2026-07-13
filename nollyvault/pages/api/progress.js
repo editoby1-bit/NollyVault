@@ -25,7 +25,20 @@ export default async function handler(req, res) {
   }
 
   if (req.method === 'GET') {
-    const { profileId } = req.query
+    const { profileId, movieId } = req.query
+
+    // Single-movie lookup, used by the watch page to resume playback
+    if (movieId) {
+      const { data, error } = await supabase
+        .from('watch_history')
+        .select('progress_seconds, completed')
+        .eq('profile_id', profileId)
+        .eq('movie_id', movieId)
+        .maybeSingle()
+      if (error) return res.status(500).json({ error: error.message })
+      return res.json({ progress: data || null })
+    }
+
     const { data, error } = await supabase
       .from('watch_history')
       .select(`
