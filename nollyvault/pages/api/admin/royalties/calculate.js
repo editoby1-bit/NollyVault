@@ -1,7 +1,7 @@
 // pages/api/admin/royalties/calculate.js
 // Run this on the 1st of each month (cron job or manual trigger).
 // Distributes 30% of revenue proportionally by watch minutes per movie.
-import { createServerSupabaseClient } from '../../../../lib/supabase'
+import { createServerSupabaseClient, supabaseAdmin } from '../../../../lib/supabase'
 
 const ADMIN_EMAILS = (process.env.ADMIN_EMAILS || '').split(',').map(e => e.trim()).filter(Boolean)
 const ROYALTY_POOL_PCT = 0.30  // 30% of revenue goes to royalty pool
@@ -23,7 +23,8 @@ export default async function handler(req, res) {
   const poolNGN = totalRevenueNGN * ROYALTY_POOL_PCT
 
   // Get total minutes per movie for the period
-  const { data: events, error } = await supabase
+  const sb = supabaseAdmin()
+  const { data: events, error } = await sb
     .from('play_events')
     .select('movie_id, minutes_watched, movies(title, producer, producer_id)')
     .eq('period', period)
@@ -54,7 +55,7 @@ export default async function handler(req, res) {
   }))
 
   // Insert distribution records
-  const { data: inserted } = await supabase
+  const { data: inserted } = await sb
     .from('royalty_distributions')
     .insert(distributions)
     .select()

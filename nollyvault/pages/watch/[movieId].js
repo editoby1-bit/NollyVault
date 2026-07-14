@@ -143,17 +143,38 @@ export default function WatchPage() {
   useEffect(() => {
     if (!streamUrl || !session) return
     const profile = JSON.parse(sessionStorage.getItem('activeProfile') || '{}')
-    const timer = setInterval(async () => {
-      await fetch('/api/progress', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          movieId, profileId: profile.id,
-          progressSeconds: Math.floor(currentTimeRef.current),
-          completed: movie?.duration ? currentTimeRef.current >= movie.duration - 5 : false,
-        }),
+
+    const saveProgress = () => {
+      const payload = JSON.stringify({
+        movieId, profileId: profile.id,
+        progressSeconds: Math.floor(currentTimeRef.current),
+        completed: movie?.duration ? currentTimeRef.current >= movie.duration - 5 : false,
       })
-    }, 30000)
-    return () => clearInterval(timer)
+      // sendBeacon fires reliably even as the page is actually closing,
+      // unlike a normal fetch which can get cancelled mid-flight.
+      if (navigator.sendBeacon) {
+        navigator.sendBeacon('/api/progress', new Blob([payload], { type: 'application/json' }))
+      } else {
+        fetch('/api/progress', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: payload, keepalive: true })
+      }
+    }
+
+    // Every 10s during playback (was 30s — meant resume could be off by up
+    // to half a minute even in the best case).
+    const timer = setInterval(saveProgress, 10000)
+
+    // Catch the actual moment someone leaves — tab close, navigating away,
+    // switching apps on mobile — so the very last few seconds aren't lost.
+    const handleVisibility = () => { if (document.visibilityState === 'hidden') saveProgress() }
+    window.addEventListener('beforeunload', saveProgress)
+    document.addEventListener('visibilitychange', handleVisibility)
+
+    return () => {
+      clearInterval(timer)
+      window.removeEventListener('beforeunload', saveProgress)
+      document.removeEventListener('visibilitychange', handleVisibility)
+      saveProgress() // also save on normal in-app navigation away from this page
+    }
   }, [streamUrl, session, movieId])
 
   const resetControls = () => {

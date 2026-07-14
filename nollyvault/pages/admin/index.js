@@ -11,11 +11,11 @@ import Link from 'next/link'
 // codebase doesn't have yet — showing "Not yet tracked" for those instead
 // of a fake number is safer than a founder mistaking placeholder data for
 // real business metrics.
-function buildStats(subscriberCount, activeMovieCount, veteranCount) {
+function buildStats(subscriberCount, activeMovieCount, veteranCount, totalWatchHours) {
   return [
     { label:'Total Subscribers', value: subscriberCount===null?'…':subscriberCount.toLocaleString(), sub:'Active paid subscriptions', color:'var(--gold)' },
     { label:'Monthly Revenue', value:'—', sub:'Not yet tracked', color:'var(--green)' },
-    { label:'Watch Hours', value:'—', sub:'Not yet tracked', color:'var(--purple)' },
+    { label:'Watch Hours', value: totalWatchHours!==null ? totalWatchHours.toLocaleString() : '…', sub:'All-time, across all movies', color:'var(--purple)' },
     { label:'Movies Licensed', value: String(activeMovieCount), sub:'Currently active', color:'var(--gold)' },
     { label:'Producer Pool (30%)', value:'—', sub:'Not yet tracked', color:'#e8774a' },
     { label:'Legacy Fund (10%)', value:'—', sub:'Not yet tracked', color:'var(--green)' },
@@ -45,6 +45,8 @@ export default function AdminDashboard() {
   const [showAddActor, setShowAddActor] = useState(false)
   const [addingActor, setAddingActor] = useState(false)
   const [editingActor, setEditingActor] = useState(null)
+  const [movieSearch, setMovieSearch] = useState('')
+  const [movieMinutes, setMovieMinutes] = useState({})
   const [uploading, setUploading] = useState(false)
   const [uploadProgress, setUploadProgress] = useState(0)
   const [tab, setTab] = useState('overview')
@@ -92,12 +94,17 @@ export default function AdminDashboard() {
       .then(r => r.ok ? r.json() : { actors: [] })
       .then(({ actors }) => setVeteranActors(actors))
       .catch(() => setVeteranActors([]))
+    fetch('/api/admin/movies/stats')
+      .then(r => r.ok ? r.json() : { minutesByMovie: {} })
+      .then(({ minutesByMovie }) => setMovieMinutes(minutesByMovie || {}))
+      .catch(() => setMovieMinutes({}))
   }, [supabase])
 
   async function handleUpload(e) {
     e.preventDefault()
     const fd = new FormData(e.target)
     const file = fd.get('videoFile')
+    const posterFile = fd.get('posterFile')
     if (!file || !file.size) { showToast('Choose a video file first', 'red'); return }
 
     setUploading(true)
@@ -148,6 +155,21 @@ export default function AdminDashboard() {
             method:'POST', headers:{'Content-Type':'application/json'},
             body:JSON.stringify({ movieId: data.movieId }),
           })
+
+          // 5. Optional poster upload, using Bunny's real Set Thumbnail API
+          if (posterFile && posterFile.size) {
+            try {
+              await fetch(`/api/admin/upload-poster?movieId=${data.movieId}`, {
+                method: 'POST',
+                headers: { 'Content-Type': posterFile.type || 'application/octet-stream' },
+                body: posterFile,
+              })
+            } catch (err) {
+              console.error('Poster upload failed:', err)
+              showToast('Movie uploaded, but the poster failed to attach — you can retry it later', 'red')
+            }
+          }
+
           showToast(`"${fd.get('title')}" uploaded and live under ${fd.get('category')}!`, 'gold')
           setUploading(false)
           setUploadProgress(0)
@@ -234,6 +256,18 @@ export default function AdminDashboard() {
     finally { setAddingActor(false) }
   }
 
+  async function toggleMovieActive(movie) {
+    const res = await fetch('/api/admin/activate-movie', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ movieId: movie.id, setActive: !movie.is_active }),
+    })
+    const data = await res.json()
+    if (data.success) {
+      setMovies(prev => prev.map(m => m.id === movie.id ? { ...m, is_active: !movie.is_active } : m))
+      showToast(`${movie.title} is now ${!movie.is_active ? 'Live' : 'Hidden'}`, 'gold')
+    } else showToast(data.error || 'Could not update', 'red')
+  }
+
   if (access === 'checking') {
     return (
       <div style={{minHeight:'100vh',background:'#080808',display:'flex',alignItems:'center',justifyContent:'center',color:'#9a9590',fontFamily:'DM Sans, sans-serif'}}>
@@ -307,7 +341,7 @@ export default function AdminDashboard() {
           {tab==='overview' && (
             <>
               <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(160px,1fr))',gap:12,marginBottom:32}}>
-                {buildStats(subscriberCount, movies.filter(m=>m.is_active).length, veteranActors?.length ?? null).map(s=>(
+                {buildStats(subscriberCount, movies.filter(m=>m.is_active).length, veteranActors?.length ?? null, Object.values(movieMinutes).reduce((sum,m)=>sum+m,0) > 0 ? Math.round(Object.values(movieMinutes).reduce((sum,m)=>sum+m,0)/60) : 0).map(s=>(
                   <div key={s.label} className="card" style={{padding:'16px 18px'}}>
                     <div style={{fontSize:11,color:'var(--text3)',textTransform:'uppercase',letterSpacing:'.07em',marginBottom:6}}>{s.label}</div>
                     <div style={{fontFamily:"'Playfair Display',serif",fontSize:24,fontWeight:700,color:s.color}}>{s.value}</div>
@@ -339,25 +373,37 @@ export default function AdminDashboard() {
 
           {/* ── MOVIES ── */}
           {tab==='movies' && (
-            <div className="card" style={{overflow:'hidden'}}>
-              <table>
-                <thead><tr><th>Title</th><th>Year</th><th>Category</th><th>Producer</th><th>Watch hrs</th><th>Royalty</th><th>Status</th><th></th></tr></thead>
-                <tbody>
-                  {movies.map((m,i)=>(
-                    <tr key={m.id}>
-                      <td style={{color:'var(--text)',fontWeight:500}}>{m.title}</td>
-                      <td>{m.year}</td>
-                      <td><span style={{fontSize:11,background:'var(--bg4)',padding:'2px 8px',borderRadius:4}}>{m.category?.split(' & ')[0]}</span></td>
-                      <td>{m.producer}</td>
-                      <td>{120+i*47}</td>
-                      <td style={{color:'var(--gold)'}}>₦{((120+i*47)*320).toLocaleString()}</td>
-                      <td><span style={{fontSize:11,padding:'2px 8px',borderRadius:4,fontWeight:500,background:m.is_active?'rgba(74,206,138,0.12)':'rgba(90,85,80,0.2)',color:m.is_active?'var(--green)':'var(--text3)'}}>{m.is_active?'Live':'Hidden'}</span></td>
-                      <td><button className="btn btn-ghost" style={{fontSize:11,padding:'4px 10px'}} onClick={()=>showToast(`Toggled: ${m.title}`)}>Toggle</button></td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+            <>
+              <div style={{marginBottom:14}}>
+                <input
+                  className="form-input" style={{maxWidth:320}}
+                  placeholder="🔍 Search movies by title…"
+                  value={movieSearch} onChange={e=>setMovieSearch(e.target.value)}
+                />
+              </div>
+              <div className="card" style={{overflow:'hidden'}}>
+                <table>
+                  <thead><tr><th>Title</th><th>Year</th><th>Category</th><th>Producer</th><th>Watch hrs</th><th>Royalty</th><th>Status</th><th></th></tr></thead>
+                  <tbody>
+                    {movies.filter(m => m.title?.toLowerCase().includes(movieSearch.toLowerCase())).map((m)=>(
+                      <tr key={m.id}>
+                        <td style={{color:'var(--text)',fontWeight:500}}>{m.title}</td>
+                        <td>{m.year}</td>
+                        <td><span style={{fontSize:11,background:'var(--bg4)',padding:'2px 8px',borderRadius:4}}>{m.category?.split(' & ')[0]}</span></td>
+                        <td>{m.producer}</td>
+                        <td style={{color:'var(--text)'}}>{movieMinutes[m.id] ? `${(movieMinutes[m.id]/60).toFixed(1)}h` : <span style={{color:'var(--text3)'}}>0h</span>}</td>
+                        <td style={{color:'var(--text3)'}} title="Populates after you run a monthly royalty calculation on the Royalties tab">Pending calc</td>
+                        <td><span style={{fontSize:11,padding:'2px 8px',borderRadius:4,fontWeight:500,background:m.is_active?'rgba(74,206,138,0.12)':'rgba(90,85,80,0.2)',color:m.is_active?'var(--green)':'var(--text3)'}}>{m.is_active?'Live':'Hidden'}</span></td>
+                        <td><button className="btn btn-ghost" style={{fontSize:11,padding:'4px 10px'}} onClick={()=>toggleMovieActive(m)}>{m.is_active?'Hide':'Activate'}</button></td>
+                      </tr>
+                    ))}
+                    {movies.filter(m => m.title?.toLowerCase().includes(movieSearch.toLowerCase())).length === 0 && (
+                      <tr><td colSpan={8} style={{textAlign:'center',padding:24,color:'var(--text3)'}}>No movies match "{movieSearch}"</td></tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </>
           )}
 
           {/* ── UPLOAD ── */}
@@ -385,6 +431,11 @@ export default function AdminDashboard() {
                 <div style={{marginBottom:20}}>
                   <label style={{display:'block',fontSize:11,fontWeight:600,color:'var(--text2)',marginBottom:6,textTransform:'uppercase',letterSpacing:'.07em'}}>Video File</label>
                   <input className="form-input" name="videoFile" type="file" accept="video/*" required disabled={uploading} />
+                </div>
+                <div style={{marginBottom:20}}>
+                  <label style={{display:'block',fontSize:11,fontWeight:600,color:'var(--text2)',marginBottom:6,textTransform:'uppercase',letterSpacing:'.07em'}}>Poster Image (optional)</label>
+                  <input className="form-input" name="posterFile" type="file" accept="image/*" disabled={uploading} />
+                  <p style={{fontSize:11,color:'var(--text3)',marginTop:6}}>Skip this and Bunny will auto-generate one from a video frame instead.</p>
                 </div>
                 {uploading && (
                   <div style={{marginBottom:20}}>

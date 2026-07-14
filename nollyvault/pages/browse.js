@@ -71,7 +71,29 @@ export default function Browse() {
     }
   }, [activeProfile, supabase])
 
-  useEffect(() => { if (movies.length) setContinueWatching(movies.slice(0,4)) }, [movies])
+  const [progressMap, setProgressMap] = useState({}) // movieId -> { pct, seconds }
+
+  useEffect(() => {
+    if (!activeProfile?.id) return
+    fetch(`/api/progress?profileId=${activeProfile.id}`)
+      .then(r => r.ok ? r.json() : { continueWatching: [] })
+      .then(({ continueWatching: cw }) => {
+        const list = (cw || [])
+          .filter(row => row.movies) // guard against orphaned rows
+          .map(row => ({ ...row.movies, _progressSeconds: row.progress_seconds }))
+        setContinueWatching(list)
+
+        const map = {}
+        for (const row of cw || []) {
+          if (!row.movies?.id) continue
+          const duration = row.movies.duration_seconds
+          const pct = duration ? Math.min(100, Math.round((row.progress_seconds / duration) * 100)) : null
+          map[row.movies.id] = pct
+        }
+        setProgressMap(map)
+      })
+      .catch(() => { setContinueWatching([]); setProgressMap({}) })
+  }, [activeProfile])
 
   const handleWatchlist = async (movie, add) => {
     if (!activeProfile || !supabase) return
@@ -124,7 +146,7 @@ export default function Browse() {
             <h2 style={{fontFamily:"'Playfair Display',serif",fontSize:22,marginBottom:20}}>Results for "{searchQuery}"</h2>
             {searchResults.length===0
               ? <p style={{color:'var(--text2)'}}>No movies found. Try a different search.</p>
-              : <div className="movie-grid">{searchResults.map(m=><MovieCard key={m.id} movie={m} onClick={setSelectedMovie}/>)}</div>
+              : <div className="movie-grid">{searchResults.map(m=><MovieCard key={m.id} movie={m} onClick={setSelectedMovie} progressPct={progressMap[m.id] ?? null}/>)}</div>
             }
           </div>
         </div>
@@ -197,13 +219,13 @@ export default function Browse() {
           </div>
 
           {/* Continue watching */}
-          {continueWatching.length>0 && <Section title="Continue Watching">{continueWatching.map((m,i)=><MovieCard key={m.id} movie={m} onClick={setSelectedMovie} progressPct={[35,62,18,80][i]||40}/>)}</Section>}
+          {continueWatching.length>0 && <Section title="Continue Watching">{continueWatching.map((m)=><MovieCard key={m.id} movie={m} onClick={setSelectedMovie} progressPct={progressMap[m.id] ?? null}/>)}</Section>}
 
           {/* Dynamic sections */}
           {SECTIONS.map(sec=>{
             const films=movies.filter(sec.filter)
             if(!films.length) return null
-            return <Section key={sec.id} title={sec.label}>{films.map(m=><MovieCard key={m.id} movie={m} onClick={setSelectedMovie}/>)}</Section>
+            return <Section key={sec.id} title={sec.label}>{films.map(m=><MovieCard key={m.id} movie={m} onClick={setSelectedMovie} progressPct={progressMap[m.id] ?? null}/>)}</Section>
           })}
 
           {/* Legendary Stars */}

@@ -16,13 +16,13 @@ export default async function handler(req, res) {
     return res.status(403).json({ error: 'Forbidden' })
   }
 
-  const { movieId, isAd = false } = req.body
+  const { movieId, isAd = false, setActive = true } = req.body
   if (!movieId) return res.status(400).json({ error: 'Missing movieId' })
 
   try {
     const sb = supabaseAdmin()
     const table = isAd ? 'retro_ads' : 'movies'
-    await sb.from(table).update({ is_active: true }).eq('id', movieId)
+    await sb.from(table).update({ is_active: !!setActive }).eq('id', movieId)
     return res.json({ success: true })
   } catch (err) {
     console.error('Activate movie error:', err)

@@ -49,14 +49,16 @@ export default async function handler(req, res) {
   try {
     const streamUrl = await getSignedStreamUrl(movie.bunny_video_guid)
 
-    // 6. Log play event for royalty pool + referral tracking
+    // 6. Log play event for royalty pool + referral tracking. Upsert on
+    // (movie_id, user_id, period) so watching the same movie multiple times
+    // in a month updates one row instead of creating duplicates that would
+    // each separately report 0 minutes and throw off the royalty math.
     const sb = supabaseAdmin()
-    await sb.from('play_events').insert({
+    await sb.from('play_events').upsert({
       movie_id: movieId,
       user_id: session.user.id,
       period: new Date().toISOString().slice(0, 7), // '2024-06'
-      minutes_watched: 0, // updated client-side via progress API
-    })
+    }, { onConflict: 'movie_id,user_id,period', ignoreDuplicates: true })
 
     return res.json({
       streamUrl,

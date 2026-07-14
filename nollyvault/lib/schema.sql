@@ -107,7 +107,8 @@ create table public.play_events (
   user_id uuid references public.users(id),
   minutes_watched integer default 0,
   period text,                         -- e.g. '2024-06' for monthly pool calc
-  created_at timestamptz default now()
+  created_at timestamptz default now(),
+  unique(movie_id, user_id, period)
 );
 
 -- Monthly royalty distribution ledger
