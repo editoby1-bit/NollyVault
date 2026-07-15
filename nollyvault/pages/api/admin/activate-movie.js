@@ -3,7 +3,7 @@
 // uploading to Bunny. Nothing else in the codebase ever did this — movies
 // were previously created with is_active: false and stayed invisible
 // forever, since useMovies() filters .eq('is_active', true).
-import { createServerSupabaseClient, supabaseAdmin } from '../../../lib/supabase'
+import { createServerSupabaseClient, supabaseAdmin, logActivity } from '../../../lib/supabase'
 
 const ADMIN_EMAILS = (process.env.ADMIN_EMAILS || '').split(',').map(e => e.trim()).filter(Boolean)
 
@@ -23,6 +23,15 @@ export default async function handler(req, res) {
     const sb = supabaseAdmin()
     const table = isAd ? 'retro_ads' : 'movies'
     await sb.from(table).update({ is_active: !!setActive }).eq('id', movieId)
+
+    const { data: row } = await sb.from(table).select('title').eq('id', movieId).single()
+    await logActivity({
+      adminEmail: session.user.email,
+      action: setActive ? `${isAd ? 'ad' : 'movie'}.activate` : `${isAd ? 'ad' : 'movie'}.hide`,
+      targetType: isAd ? 'ad' : 'movie',
+      targetLabel: row?.title || movieId,
+    })
+
     return res.json({ success: true })
   } catch (err) {
     console.error('Activate movie error:', err)

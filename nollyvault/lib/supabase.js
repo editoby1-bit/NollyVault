@@ -39,3 +39,22 @@ export function supabaseAdmin() {
     auth: { autoRefreshToken: false, persistSession: false },
   })
 }
+
+/**
+ * Records an admin action for accountability — who did what, when.
+ * Fire-and-forget: logging failures never block the actual action.
+ */
+export async function logActivity({ adminEmail, action, targetType, targetLabel, details }) {
+  try {
+    const sb = supabaseAdmin()
+    await sb.from('admin_activity_log').insert({
+      admin_email: adminEmail,
+      action,
+      target_type: targetType || null,
+      target_label: targetLabel || null,
+      details: details || null,
+    })
+  } catch (err) {
+    console.error('Activity log failed (non-blocking):', err)
+  }
+}

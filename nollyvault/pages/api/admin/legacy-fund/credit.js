@@ -3,7 +3,7 @@
 //   50% → Legacy Participation Pool  (future direct actor payments)
 //   30% → Veteran Assistance Fund    (medical, emergency, welfare)
 //   20% → Preservation Fund          (VHS restoration, digitization, archival)
-import { createServerSupabaseClient, supabaseAdmin } from '../../../../lib/supabase'
+import { createServerSupabaseClient, supabaseAdmin, logActivity } from '../../../../lib/supabase'
 
 const ADMIN_EMAILS = (process.env.ADMIN_EMAILS || '').split(',').map(e => e.trim()).filter(Boolean)
 
@@ -131,6 +131,14 @@ export default async function handler(req, res) {
     fund_contribution_ngn: totalFund,
     updated_at: new Date().toISOString(),
   }, { onConflict: 'period' })
+
+  await logActivity({
+    adminEmail: session.user.email,
+    action: 'legacy_fund.credit',
+    targetType: 'legacy_fund',
+    targetLabel: period,
+    details: `Revenue: ₦${totalRevenueNGN.toLocaleString()}, Fund: ₦${totalFund.toLocaleString()}, ${allocations.length} actors`,
+  })
 
   return res.json({
     success: true,

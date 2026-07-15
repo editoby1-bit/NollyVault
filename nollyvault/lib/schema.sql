@@ -155,6 +155,22 @@ create table public.producer_submissions (
   created_at timestamptz default now()
 );
 
+-- ─── ADMIN ACTIVITY LOG ─────────────────────────────────────────────────────
+-- Records who did what, when — especially for destructive/financial actions
+-- (deleting a movie, hiding content, crediting funds). Not user-facing.
+create table public.admin_activity_log (
+  id uuid default uuid_generate_v4() primary key,
+  admin_email text not null,
+  action text not null,              -- e.g. 'movie.delete', 'movie.hide', 'legacy_fund.credit'
+  target_type text,                  -- e.g. 'movie', 'sponsor', 'veteran_actor'
+  target_label text,                 -- human-readable, e.g. the movie title
+  details text,                      -- free text, e.g. amounts or reasons
+  created_at timestamptz default now()
+);
+alter table public.admin_activity_log enable row level security;
+-- No policies — only ever written/read via the service-role key in admin
+-- API routes, same pattern as everything else locked down this way.
+
 -- ─── ROW LEVEL SECURITY ───────────────────────────────────────────────────────
 -- Users can only read/write their own data.
 

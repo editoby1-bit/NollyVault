@@ -1,5 +1,5 @@
 // pages/api/admin/sponsors/toggle.js
-import { createServerSupabaseClient, supabaseAdmin } from '../../../../lib/supabase'
+import { createServerSupabaseClient, supabaseAdmin, logActivity } from '../../../../lib/supabase'
 
 const ADMIN_EMAILS = (process.env.ADMIN_EMAILS || '').split(',').map(e => e.trim()).filter(Boolean)
 
@@ -18,6 +18,15 @@ export default async function handler(req, res) {
   try {
     const sb = supabaseAdmin()
     await sb.from('brand_sponsors').update({ is_active: !!setActive }).eq('id', sponsorId)
+
+    const { data: row } = await sb.from('brand_sponsors').select('brand_name').eq('id', sponsorId).single()
+    await logActivity({
+      adminEmail: session.user.email,
+      action: setActive ? 'sponsor.activate' : 'sponsor.deactivate',
+      targetType: 'sponsor',
+      targetLabel: row?.brand_name || sponsorId,
+    })
+
     return res.json({ success: true })
   } catch (err) {
     console.error('Toggle sponsor error:', err)

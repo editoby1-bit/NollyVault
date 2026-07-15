@@ -1,5 +1,5 @@
 // pages/admin/index.js
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useRouter } from 'next/router'
 import { useSession, useSupabaseClient } from '../_app'
 import Link from 'next/link'
@@ -24,22 +24,18 @@ function buildStats(subscriberCount, activeMovieCount, veteranCount, totalWatchH
   ]
 }
 
-const MOCK_MOVIES = [
-  { id:'1', title:'Living in Bondage', year:1992, category:'Classic Horror & Occult', producer:'NEK Video Links', is_active:true },
-  { id:'2', title:'Karishika', year:1996, category:'Classic Horror & Occult', producer:'Vic. O Productions', is_active:true },
-  { id:'3', title:'Glamour Girls', year:1994, category:'Village Drama', producer:'Zeb Ejiro', is_active:true },
-  { id:'4', title:'Rattlesnake', year:1995, category:'Crime & Thriller', producer:'Amaka Igwe Films', is_active:true },
-  { id:'5', title:'Issakaba', year:2000, category:'Crime & Thriller', producer:'Lancelot Imasuen', is_active:false },
-]
+// (mock movie fallback removed — admin panel now always fetches real data
+// via /api/admin/movies/list, which sees every movie regardless of
+// active/hidden status, unlike the public RLS-restricted query used before)
 
 
-const TABS = ['overview','movies','upload','royalties','legacy fund','veterans','referrals','ads & sponsors']
+const TABS = ['overview','movies','upload','royalties','legacy fund','veterans','referrals','ads & sponsors','logs']
 
 export default function AdminDashboard() {
   const session = useSession()
   const supabase = useSupabaseClient()
   const router = useRouter()
-  const [movies, setMovies] = useState(MOCK_MOVIES)
+  const [movies, setMovies] = useState(null)
   const [subscriberCount, setSubscriberCount] = useState(null)
   const [veteranActors, setVeteranActors] = useState(null)
   const [showAddActor, setShowAddActor] = useState(false)
@@ -50,6 +46,10 @@ export default function AdminDashboard() {
   const [referralCodes, setReferralCodes] = useState(null)
   const [referralEarnings, setReferralEarnings] = useState(null)
   const [sponsors, setSponsors] = useState(null)
+  const [logs, setLogs] = useState(null)
+  const [deletingMovie, setDeletingMovie] = useState(null)
+  const [outreachActor, setOutreachActor] = useState(null)
+  const outreachTextRef = useRef(null)
   const [uploading, setUploading] = useState(false)
   const [uploadProgress, setUploadProgress] = useState(0)
   const [tab, setTab] = useState('overview')
@@ -85,8 +85,10 @@ export default function AdminDashboard() {
 
   useEffect(() => {
     if (!supabase) return
-    supabase.from('movies').select('*').order('created_at',{ascending:false})
-      .then(({data})=>{ if(data?.length) setMovies(data) })
+    fetch('/api/admin/movies/list')
+      .then(r => r.ok ? r.json() : { movies: [] })
+      .then(({ movies }) => setMovies(movies || []))
+      .catch(() => setMovies([]))
     // Real subscriber count — replaces the hardcoded "1,247" that never updated
     supabase.from('users').select('id',{count:'exact',head:true}).eq('plan_status','active')
       .then(({count})=>setSubscriberCount(count ?? 0))
@@ -109,6 +111,10 @@ export default function AdminDashboard() {
       .then(r => r.ok ? r.json() : { sponsors: [] })
       .then(({ sponsors }) => setSponsors(sponsors))
       .catch(() => setSponsors([]))
+    fetch('/api/admin/logs/list')
+      .then(r => r.ok ? r.json() : { logs: [] })
+      .then(({ logs }) => setLogs(logs))
+      .catch(() => setLogs([]))
   }, [supabase])
 
   async function handleUpload(e) {
@@ -185,7 +191,7 @@ export default function AdminDashboard() {
           setUploading(false)
           setUploadProgress(0)
           e.target.reset()
-          if (supabase) supabase.from('movies').select('*').order('created_at',{ascending:false}).then(({data})=>{ if(data?.length) setMovies(data) })
+          fetch('/api/admin/movies/list').then(r=>r.ok?r.json():{movies:[]}).then(({movies})=>setMovies(movies||[]))
         },
       })
 
@@ -265,6 +271,19 @@ export default function AdminDashboard() {
       } else showToast(data.error || 'Could not update actor', 'red')
     } catch { showToast('Request failed', 'red') }
     finally { setAddingActor(false) }
+  }
+
+  async function deleteMovie(movie) {
+    const res = await fetch('/api/admin/movies/delete', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ movieId: movie.id }),
+    })
+    const data = await res.json()
+    if (data.success) {
+      setMovies(prev => prev.filter(m => m.id !== movie.id))
+      showToast(`"${movie.title}" permanently deleted`, 'gold')
+      setDeletingMovie(null)
+    } else showToast(data.error || 'Could not delete', 'red')
   }
 
   async function toggleMovieActive(movie) {
@@ -376,7 +395,7 @@ export default function AdminDashboard() {
           {tab==='overview' && (
             <>
               <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(160px,1fr))',gap:12,marginBottom:32}}>
-                {buildStats(subscriberCount, movies.filter(m=>m.is_active).length, veteranActors?.length ?? null, Object.values(movieMinutes).reduce((sum,m)=>sum+m,0) > 0 ? Math.round(Object.values(movieMinutes).reduce((sum,m)=>sum+m,0)/60) : 0).map(s=>(
+                {buildStats(subscriberCount, (movies||[]).filter(m=>m.is_active).length, veteranActors?.length ?? null, Object.values(movieMinutes).reduce((sum,m)=>sum+m,0) > 0 ? Math.round(Object.values(movieMinutes).reduce((sum,m)=>sum+m,0)/60) : 0).map(s=>(
                   <div key={s.label} className="card" style={{padding:'16px 18px'}}>
                     <div style={{fontSize:11,color:'var(--text3)',textTransform:'uppercase',letterSpacing:'.07em',marginBottom:6}}>{s.label}</div>
                     <div style={{fontFamily:"'Playfair Display',serif",fontSize:24,fontWeight:700,color:s.color}}>{s.value}</div>
@@ -387,15 +406,16 @@ export default function AdminDashboard() {
 
               {/* Revenue split */}
               <div className="card" style={{padding:'22px 24px',marginBottom:16}}>
-                <div style={{fontWeight:600,fontSize:15,marginBottom:16}}>Revenue Split — This Month</div>
+                <div style={{fontWeight:600,fontSize:15,marginBottom:4}}>Revenue Split Policy</div>
+                <p style={{fontSize:12,color:'var(--text3)',marginBottom:16}}>The percentages are your real, fixed policy. Naira amounts populate once you run a real monthly royalty/legacy fund calculation — not shown yet since none has been run.</p>
                 {[
-                  {label:'Producer Royalty Pool',pct:30,amount:'₦960k',color:'var(--gold)'},
-                  {label:'NaijaRewind Operations',pct:60,amount:'₦1.92M',color:'var(--bg4)'},
-                  {label:'Veterans Legacy Fund',pct:10,amount:'₦320k',color:'var(--green)'},
+                  {label:'Producer Royalty Pool',pct:30,color:'var(--gold)'},
+                  {label:'NaijaRewind Operations',pct:60,color:'var(--bg4)'},
+                  {label:'Veterans Legacy Fund',pct:10,color:'var(--green)'},
                 ].map(r=>(
                   <div key={r.label} style={{marginBottom:14}}>
                     <div style={{display:'flex',justifyContent:'space-between',fontSize:13,color:'var(--text2)',marginBottom:5}}>
-                      <span>{r.label}</span><span style={{color:r.color,fontWeight:600}}>{r.pct}% · {r.amount}</span>
+                      <span>{r.label}</span><span style={{color:r.color,fontWeight:600}}>{r.pct}%</span>
                     </div>
                     <div style={{height:6,background:'var(--bg4)',borderRadius:3}}>
                       <div style={{height:'100%',background:r.color,borderRadius:3,width:`${r.pct}%`}}/>
@@ -420,7 +440,7 @@ export default function AdminDashboard() {
                 <table>
                   <thead><tr><th>Title</th><th>Year</th><th>Category</th><th>Producer</th><th>Watch hrs</th><th>Royalty</th><th>Status</th><th></th></tr></thead>
                   <tbody>
-                    {movies.filter(m => m.title?.toLowerCase().includes(movieSearch.toLowerCase())).map((m)=>(
+                    {(movies||[]).filter(m => m.title?.toLowerCase().includes(movieSearch.toLowerCase())).map((m)=>(
                       <tr key={m.id}>
                         <td style={{color:'var(--text)',fontWeight:500}}>{m.title}</td>
                         <td>{m.year}</td>
@@ -429,10 +449,13 @@ export default function AdminDashboard() {
                         <td style={{color:'var(--text)'}}>{movieMinutes[m.id] ? `${(movieMinutes[m.id]/60).toFixed(1)}h` : <span style={{color:'var(--text3)'}}>0h</span>}</td>
                         <td style={{color:'var(--text3)'}} title="Populates after you run a monthly royalty calculation on the Royalties tab">Pending calc</td>
                         <td><span style={{fontSize:11,padding:'2px 8px',borderRadius:4,fontWeight:500,background:m.is_active?'rgba(74,206,138,0.12)':'rgba(90,85,80,0.2)',color:m.is_active?'var(--green)':'var(--text3)'}}>{m.is_active?'Live':'Hidden'}</span></td>
-                        <td><button className="btn btn-ghost" style={{fontSize:11,padding:'4px 10px'}} onClick={()=>toggleMovieActive(m)}>{m.is_active?'Hide':'Activate'}</button></td>
+                        <td><button className="btn btn-ghost" style={{fontSize:11,padding:'4px 10px',marginRight:6}} onClick={()=>toggleMovieActive(m)}>{m.is_active?'Hide':'Activate'}</button><button className="btn btn-ghost" style={{fontSize:11,padding:'4px 10px',color:'var(--red)'}} onClick={()=>setDeletingMovie(m)}>Delete</button></td>
                       </tr>
                     ))}
-                    {movies.filter(m => m.title?.toLowerCase().includes(movieSearch.toLowerCase())).length === 0 && (
+                    {movies === null && (
+                      <tr><td colSpan={8} style={{textAlign:'center',padding:24,color:'var(--text3)'}}>Loading…</td></tr>
+                    )}
+                    {movies !== null && (movies||[]).filter(m => m.title?.toLowerCase().includes(movieSearch.toLowerCase())).length === 0 && (
                       <tr><td colSpan={8} style={{textAlign:'center',padding:24,color:'var(--text3)'}}>No movies match "{movieSearch}"</td></tr>
                     )}
                   </tbody>
@@ -649,7 +672,7 @@ export default function AdminDashboard() {
                           <td style={{color:a.is_verified?'var(--green)':'var(--text3)'}}>{a.is_verified?'✓ Verified':'—'}</td>
                           <td>
                             <button className="btn btn-ghost" style={{fontSize:11,padding:'4px 10px',marginRight:6}} onClick={()=>setEditingActor(a)}>Edit</button>
-                            <button className="btn btn-ghost" style={{fontSize:11,padding:'4px 10px'}} onClick={()=>showToast(`Draft outreach message for ${a.name}`)}>Draft Outreach</button>
+                            <button className="btn btn-ghost" style={{fontSize:11,padding:'4px 10px'}} onClick={()=>setOutreachActor(a)}>Draft Outreach</button>
                           </td>
                         </tr>
                       ))}
@@ -790,8 +813,84 @@ export default function AdminDashboard() {
               </div>
             </div>
           )}
+
+          {/* ── LOGS ── */}
+          {tab==='logs' && (
+            <div>
+              <div className="card" style={{padding:'20px 24px',marginBottom:16}}>
+                <h3 style={{fontSize:15,fontWeight:600,marginBottom:8}}>Admin Activity Log</h3>
+                <p style={{fontSize:13,color:'var(--text2)',marginBottom:0}}>
+                  Every hide, delete, fund credit, and status change is recorded here with who did it and when. Last 100 actions.
+                </p>
+              </div>
+              <div className="card" style={{overflow:'hidden'}}>
+                {logs === null ? (
+                  <div style={{padding:'24px',textAlign:'center',color:'var(--text3)',fontSize:13}}>Loading…</div>
+                ) : !logs.length ? (
+                  <div style={{padding:'24px',textAlign:'center',color:'var(--text3)',fontSize:13}}>No activity logged yet.</div>
+                ) : (
+                  <table>
+                    <thead><tr><th>When</th><th>Admin</th><th>Action</th><th>Target</th><th>Details</th></tr></thead>
+                    <tbody>
+                      {logs.map(l=>(
+                        <tr key={l.id}>
+                          <td style={{whiteSpace:'nowrap',fontSize:12,color:'var(--text3)'}}>{new Date(l.created_at).toLocaleString()}</td>
+                          <td style={{fontSize:12}}>{l.admin_email}</td>
+                          <td><span style={{fontSize:11,padding:'2px 8px',borderRadius:4,background:'var(--bg4)'}}>{l.action}</span></td>
+                          <td>{l.target_label}</td>
+                          <td style={{fontSize:12,color:'var(--text2)'}}>{l.details}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                )}
+              </div>
+            </div>
+          )}
         </div>
       </div>
+
+      {deletingMovie && (
+        <div style={{position:'fixed',inset:0,background:'rgba(0,0,0,0.7)',display:'flex',alignItems:'center',justifyContent:'center',zIndex:200,padding:20}} onClick={()=>setDeletingMovie(null)}>
+          <div className="card" style={{width:'100%',maxWidth:420,padding:24}} onClick={e=>e.stopPropagation()}>
+            <h3 style={{fontSize:16,fontWeight:600,marginBottom:10,color:'var(--red)'}}>Delete "{deletingMovie.title}"?</h3>
+            <p style={{fontSize:13,color:'var(--text2)',marginBottom:20,lineHeight:1.6}}>
+              This permanently removes the movie from the database <strong>and deletes the video file from Bunny.net</strong> — this cannot be undone. If you just want to pull it from the app temporarily, use "Hide" instead.
+            </p>
+            <div style={{display:'flex',gap:10}}>
+              <button className="btn btn-ghost" style={{background:'var(--red)',color:'#fff'}} onClick={()=>deleteMovie(deletingMovie)}>Yes, Delete Permanently</button>
+              <button className="btn btn-ghost" onClick={()=>setDeletingMovie(null)}>Cancel</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {outreachActor && (
+        <div style={{position:'fixed',inset:0,background:'rgba(0,0,0,0.7)',display:'flex',alignItems:'center',justifyContent:'center',zIndex:200,padding:20}} onClick={()=>setOutreachActor(null)}>
+          <div className="card" style={{width:'100%',maxWidth:520,padding:24}} onClick={e=>e.stopPropagation()}>
+            <h3 style={{fontSize:16,fontWeight:600,marginBottom:14}}>Outreach draft — {outreachActor.name}</h3>
+            <p style={{fontSize:12,color:'var(--text3)',marginBottom:10}}>Copy this, personalize it, and send via DM/email. This doesn't send anything automatically — there's no messaging integration yet.</p>
+            <textarea
+              ref={outreachTextRef}
+              readOnly
+              style={{width:'100%',minHeight:180,background:'var(--bg3)',border:'1px solid var(--bg4)',borderRadius:8,padding:14,fontSize:13,color:'var(--text)',fontFamily:'inherit',lineHeight:1.6,resize:'vertical'}}
+              value={`Hi ${outreachActor.name.split(' ')[0]},
+
+I'm reaching out from NaijaRewind, a new platform bringing classic Nollywood films back for streaming — including some of the titles you're remembered for.
+
+We've built a Legacy Fund into the platform: 10% of subscription revenue goes directly toward honoring and supporting veteran actors like yourself, through direct participation payments and welfare support, funded automatically as people watch.
+
+I'd love to tell you more and see if you'd like to be part of it — no obligation, just an introduction for now. Would you be open to a quick call or chat?
+
+Warm regards`}
+            />
+            <div style={{display:'flex',gap:10,marginTop:14}}>
+              <button className="btn btn-gold" onClick={()=>{navigator.clipboard.writeText(outreachTextRef.current?.value || ''); showToast('Copied to clipboard','gold')}}>Copy Message</button>
+              <button className="btn btn-ghost" onClick={()=>setOutreachActor(null)}>Close</button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {editingActor && (
         <div style={{position:'fixed',inset:0,background:'rgba(0,0,0,0.7)',display:'flex',alignItems:'center',justifyContent:'center',zIndex:200,padding:20}} onClick={()=>setEditingActor(null)}>
