@@ -47,6 +47,9 @@ export default function AdminDashboard() {
   const [editingActor, setEditingActor] = useState(null)
   const [movieSearch, setMovieSearch] = useState('')
   const [movieMinutes, setMovieMinutes] = useState({})
+  const [referralCodes, setReferralCodes] = useState(null)
+  const [referralEarnings, setReferralEarnings] = useState(null)
+  const [sponsors, setSponsors] = useState(null)
   const [uploading, setUploading] = useState(false)
   const [uploadProgress, setUploadProgress] = useState(0)
   const [tab, setTab] = useState('overview')
@@ -98,6 +101,14 @@ export default function AdminDashboard() {
       .then(r => r.ok ? r.json() : { minutesByMovie: {} })
       .then(({ minutesByMovie }) => setMovieMinutes(minutesByMovie || {}))
       .catch(() => setMovieMinutes({}))
+    fetch('/api/admin/referrals/list')
+      .then(r => r.ok ? r.json() : { codes: [], earnings: [] })
+      .then(({ codes, earnings }) => { setReferralCodes(codes); setReferralEarnings(earnings) })
+      .catch(() => { setReferralCodes([]); setReferralEarnings([]) })
+    fetch('/api/admin/sponsors/list')
+      .then(r => r.ok ? r.json() : { sponsors: [] })
+      .then(({ sponsors }) => setSponsors(sponsors))
+      .catch(() => setSponsors([]))
   }, [supabase])
 
   async function handleUpload(e) {
@@ -265,6 +276,30 @@ export default function AdminDashboard() {
     if (data.success) {
       setMovies(prev => prev.map(m => m.id === movie.id ? { ...m, is_active: !movie.is_active } : m))
       showToast(`${movie.title} is now ${!movie.is_active ? 'Live' : 'Hidden'}`, 'gold')
+    } else showToast(data.error || 'Could not update', 'red')
+  }
+
+  async function generateReferralCode(actor) {
+    const res = await fetch('/api/admin/referrals/create', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ veteranActorId: actor.id, actorName: actor.name }),
+    })
+    const data = await res.json()
+    if (data.success) {
+      setReferralCodes(prev => [data.referralCode, ...(prev||[])])
+      showToast(`Code ${data.referralCode.code} created for ${actor.name}`, 'gold')
+    } else showToast(data.error || 'Could not create code', 'red')
+  }
+
+  async function toggleSponsor(sponsor) {
+    const res = await fetch('/api/admin/sponsors/toggle', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ sponsorId: sponsor.id, setActive: !sponsor.is_active }),
+    })
+    const data = await res.json()
+    if (data.success) {
+      setSponsors(prev => prev.map(s => s.id === sponsor.id ? { ...s, is_active: !sponsor.is_active } : s))
+      showToast(`${sponsor.brand_name} marked ${!sponsor.is_active ? 'Active' : 'Inactive'}`, 'gold')
     } else showToast(data.error || 'Could not update', 'red')
   }
 
@@ -624,10 +659,134 @@ export default function AdminDashboard() {
               </div>
 
               <div style={{marginTop:20,padding:'16px',background:'rgba(200,168,75,0.06)',border:'1px solid rgba(200,168,75,0.2)',borderRadius:8,fontSize:13,color:'var(--text2)',lineHeight:1.7}}>
-                <strong style={{color:'var(--gold)'}}>Outreach strategy:</strong> Start with actors who are most active on social media — 
-                Kanayo O. Kanayo and Pete Edochie both have verified Instagram accounts with large followings. 
-                A simple DM explaining the platform and the Legacy Fund tends to get responses. 
+                <strong style={{color:'var(--gold)'}}>Outreach strategy:</strong> Start with whichever actors are most active on social media today — check first, don't assume.
+                A simple DM explaining the platform and the Legacy Fund tends to get responses.
                 No need to mention payment figures until you have a meeting.
+              </div>
+            </div>
+          )}
+
+          {/* ── REFERRALS ── */}
+          {tab==='referrals' && (
+            <div>
+              <div className="card" style={{padding:'20px 24px',marginBottom:16}}>
+                <h3 style={{fontSize:15,fontWeight:600,marginBottom:8}}>Actor Referral Codes</h3>
+                <p style={{fontSize:13,color:'var(--text2)',marginBottom:16}}>
+                  Give veteran actors a personal code (e.g. "KANAYO2024") to share with fans. When someone subscribes using it,
+                  the actor earns a 5% cut of that subscriber's revenue, tracked monthly.
+                </p>
+              </div>
+
+              <div style={{fontWeight:600,fontSize:15,marginBottom:12}}>Generate a code</div>
+              <div className="card" style={{overflow:'hidden',marginBottom:24}}>
+                {!veteranActors?.length ? (
+                  <div style={{padding:'24px',textAlign:'center',color:'var(--text3)',fontSize:13}}>
+                    Add veteran actors first (Veterans tab) before generating referral codes for them.
+                  </div>
+                ) : (
+                  <table>
+                    <thead><tr><th>Actor</th><th>Existing Codes</th><th></th></tr></thead>
+                    <tbody>
+                      {veteranActors.map(a=>{
+                        const codes = (referralCodes||[]).filter(c=>c.veteran_actor_id===a.id)
+                        return (
+                          <tr key={a.id}>
+                            <td style={{color:'var(--text)',fontWeight:500}}>{a.name}</td>
+                            <td>{codes.length ? codes.map(c=>c.code).join(', ') : <span style={{color:'var(--text3)'}}>None yet</span>}</td>
+                            <td><button className="btn btn-ghost" style={{fontSize:11,padding:'4px 10px'}} onClick={()=>generateReferralCode(a)}>+ Generate Code</button></td>
+                          </tr>
+                        )
+                      })}
+                    </tbody>
+                  </table>
+                )}
+              </div>
+
+              <div style={{fontWeight:600,fontSize:15,marginBottom:12}}>All Codes</div>
+              <div className="card" style={{overflow:'hidden',marginBottom:24}}>
+                {referralCodes === null ? (
+                  <div style={{padding:'24px',textAlign:'center',color:'var(--text3)',fontSize:13}}>Loading…</div>
+                ) : !referralCodes.length ? (
+                  <div style={{padding:'24px',textAlign:'center',color:'var(--text3)',fontSize:13}}>No referral codes generated yet.</div>
+                ) : (
+                  <table>
+                    <thead><tr><th>Code</th><th>Actor</th><th>Total Referrals</th><th>Total Earned</th><th>Status</th></tr></thead>
+                    <tbody>
+                      {referralCodes.map(c=>(
+                        <tr key={c.id}>
+                          <td style={{color:'var(--gold)',fontFamily:'monospace',fontWeight:600}}>{c.code}</td>
+                          <td>{c.actor_name}</td>
+                          <td>{c.total_referrals || 0}</td>
+                          <td style={{color:'var(--green)'}}>₦{Number(c.total_earned_ngn||0).toLocaleString()}</td>
+                          <td><span style={{fontSize:11,padding:'2px 8px',borderRadius:4,background:c.is_active?'rgba(74,206,138,0.12)':'rgba(90,85,80,0.2)',color:c.is_active?'var(--green)':'var(--text3)'}}>{c.is_active?'Active':'Inactive'}</span></td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                )}
+              </div>
+
+              <div style={{fontWeight:600,fontSize:15,marginBottom:12}}>Recent Monthly Earnings</div>
+              <div className="card" style={{overflow:'hidden'}}>
+                {!referralEarnings?.length ? (
+                  <div style={{padding:'24px',textAlign:'center',color:'var(--text3)',fontSize:13}}>
+                    No earnings calculated yet — this populates once monthly referral earnings are computed for a real revenue period.
+                  </div>
+                ) : (
+                  <table>
+                    <thead><tr><th>Period</th><th>Actor</th><th>Active Referrals</th><th>Earned</th><th>Status</th></tr></thead>
+                    <tbody>
+                      {referralEarnings.map(e=>(
+                        <tr key={e.id}>
+                          <td>{e.period}</td>
+                          <td>{e.actor_name}</td>
+                          <td>{e.active_referrals}</td>
+                          <td style={{color:'var(--green)'}}>₦{Number(e.earned_ngn||0).toLocaleString()}</td>
+                          <td>{e.status}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* ── ADS & SPONSORS ── */}
+          {tab==='ads & sponsors' && (
+            <div>
+              <div className="card" style={{padding:'20px 24px',marginBottom:16}}>
+                <h3 style={{fontSize:15,fontWeight:600,marginBottom:8}}>Sponsor Enquiries & Deals</h3>
+                <p style={{fontSize:13,color:'var(--text2)',marginBottom:0}}>
+                  Every submission from the public <code>/advertise</code> page lands here as "Inactive" (pending review).
+                  Mark a deal Active once it's confirmed and you're ready for it to appear in the pre-roll rotation.
+                </p>
+              </div>
+
+              <div className="card" style={{overflow:'hidden'}}>
+                {sponsors === null ? (
+                  <div style={{padding:'24px',textAlign:'center',color:'var(--text3)',fontSize:13}}>Loading…</div>
+                ) : !sponsors.length ? (
+                  <div style={{padding:'24px',textAlign:'center',color:'var(--text3)',fontSize:13}}>
+                    No sponsor enquiries yet — these appear automatically when someone submits the /advertise form.
+                  </div>
+                ) : (
+                  <table>
+                    <thead><tr><th>Brand</th><th>Contact</th><th>Monthly Fee</th><th>Notes</th><th>Status</th><th></th></tr></thead>
+                    <tbody>
+                      {sponsors.map(s=>(
+                        <tr key={s.id}>
+                          <td style={{color:'var(--text)',fontWeight:500}}>{s.brand_name}</td>
+                          <td>{s.contact_name}<br/><span style={{color:'var(--text3)',fontSize:12}}>{s.contact_email}</span></td>
+                          <td>{s.monthly_fee_ngn ? `₦${Number(s.monthly_fee_ngn).toLocaleString()}` : <span style={{color:'var(--text3)'}}>Not set</span>}</td>
+                          <td style={{maxWidth:220,whiteSpace:'pre-wrap',fontSize:12,color:'var(--text2)'}}>{s.notes}</td>
+                          <td><span style={{fontSize:11,padding:'2px 8px',borderRadius:4,background:s.is_active?'rgba(74,206,138,0.12)':'rgba(90,85,80,0.2)',color:s.is_active?'var(--green)':'var(--text3)'}}>{s.is_active?'Active':'Inactive'}</span></td>
+                          <td><button className="btn btn-ghost" style={{fontSize:11,padding:'4px 10px'}} onClick={()=>toggleSponsor(s)}>{s.is_active?'Deactivate':'Activate'}</button></td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                )}
               </div>
             </div>
           )}
