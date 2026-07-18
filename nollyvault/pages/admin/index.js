@@ -29,7 +29,7 @@ function buildStats(subscriberCount, activeMovieCount, veteranCount, totalWatchH
 // active/hidden status, unlike the public RLS-restricted query used before)
 
 
-const TABS = ['overview','movies','upload','royalties','legacy fund','veterans','referrals','ads & sponsors','logs']
+const TABS = ['overview','movies','upload','reels','royalties','legacy fund','veterans','referrals','ads & sponsors','logs']
 
 export default function AdminDashboard() {
   const session = useSession()
@@ -47,7 +47,12 @@ export default function AdminDashboard() {
   const [referralEarnings, setReferralEarnings] = useState(null)
   const [sponsors, setSponsors] = useState(null)
   const [logs, setLogs] = useState(null)
+  const [reels, setReels] = useState(null)
+  const [uploadingReel, setUploadingReel] = useState(false)
+  const [reelProgress, setReelProgress] = useState(0)
   const [deletingMovie, setDeletingMovie] = useState(null)
+  const [editingMovie, setEditingMovie] = useState(null)
+  const [savingMovie, setSavingMovie] = useState(false)
   const [outreachActor, setOutreachActor] = useState(null)
   const outreachTextRef = useRef(null)
   const [uploading, setUploading] = useState(false)
@@ -115,6 +120,10 @@ export default function AdminDashboard() {
       .then(r => r.ok ? r.json() : { logs: [] })
       .then(({ logs }) => setLogs(logs))
       .catch(() => setLogs([]))
+    fetch('/api/admin/reels/list')
+      .then(r => r.ok ? r.json() : { reels: [] })
+      .then(({ reels }) => setReels(reels))
+      .catch(() => setReels([]))
   }, [supabase])
 
   async function handleUpload(e) {
@@ -273,6 +282,42 @@ export default function AdminDashboard() {
     finally { setAddingActor(false) }
   }
 
+  async function handleUpdateMovie(e) {
+    e.preventDefault()
+    const fd = new FormData(e.target)
+    setSavingMovie(true)
+    try {
+      const res = await fetch('/api/admin/movies/update', {
+        method:'POST', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({
+          movieId: editingMovie.id,
+          title: fd.get('title'), year: fd.get('year'),
+          producer: fd.get('producer'), category: fd.get('category'),
+          description: fd.get('description'),
+        }),
+      })
+      const data = await res.json()
+      if (data.success) {
+        setMovies(prev => prev.map(m => m.id === data.movie.id ? data.movie : m))
+        showToast(`"${data.movie.title}" updated`, 'gold')
+        setEditingMovie(null)
+      } else showToast(data.error || 'Could not save', 'red')
+    } catch { showToast('Request failed', 'red') }
+    finally { setSavingMovie(false) }
+  }
+
+  async function syncDuration(movie) {
+    const res = await fetch('/api/admin/movies/sync-duration', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ movieId: movie.id }),
+    })
+    const data = await res.json()
+    if (data.success) {
+      setMovies(prev => prev.map(m => m.id === movie.id ? { ...m, duration_seconds: data.duration_seconds } : m))
+      showToast(`Duration synced: ${Math.round(data.duration_seconds/60)} min`, 'gold')
+    } else showToast(data.error || 'Could not sync duration', 'red')
+  }
+
   async function deleteMovie(movie) {
     const res = await fetch('/api/admin/movies/delete', {
       method:'POST', headers:{'Content-Type':'application/json'},
@@ -284,6 +329,80 @@ export default function AdminDashboard() {
       showToast(`"${movie.title}" permanently deleted`, 'gold')
       setDeletingMovie(null)
     } else showToast(data.error || 'Could not delete', 'red')
+  }
+
+  async function handleReelUpload(e) {
+    e.preventDefault()
+    const fd = new FormData(e.target)
+    const file = fd.get('reelFile')
+    const movieId = fd.get('movieId')
+    const title = fd.get('reelTitle')
+    if (!file || !file.size) { showToast('Choose a clip file first', 'red'); return }
+    if (!movieId) { showToast('Pick which movie this reel is from', 'red'); return }
+
+    setUploadingReel(true)
+    setReelProgress(0)
+    try {
+      const res = await fetch('/api/admin/reels/create', {
+        method:'POST', headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({ movieId, title }),
+      })
+      const data = await res.json()
+      if (!data.bunny_video_guid) { showToast(data.error||'Could not create reel entry','red'); setUploadingReel(false); return }
+
+      const authRes = await fetch('/api/admin/tus-auth', {
+        method:'POST', headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({ videoGuid: data.bunny_video_guid }),
+      })
+      const auth = await authRes.json()
+      if (!auth.authorizationSignature) { showToast('Could not authorize upload','red'); setUploadingReel(false); return }
+
+      const { Upload } = await import('tus-js-client')
+      const upload = new Upload(file, {
+        endpoint: auth.endpoint,
+        retryDelays: [0, 3000, 5000, 10000, 20000],
+        headers: {
+          AuthorizationSignature: auth.authorizationSignature,
+          AuthorizationExpire: String(auth.authorizationExpire),
+          VideoId: auth.videoId,
+          LibraryId: String(auth.libraryId),
+        },
+        metadata: { filetype: file.type, title },
+        onError: (err) => { showToast('Upload failed: ' + err.message, 'red'); setUploadingReel(false) },
+        onProgress: (up, total) => setReelProgress(Math.round((up/total)*100)),
+        onSuccess: async () => {
+          await fetch('/api/admin/reels/activate', {
+            method:'POST', headers:{'Content-Type':'application/json'},
+            body:JSON.stringify({ reelId: data.reelId }),
+          })
+          showToast(`Reel "${title}" uploaded and live!`, 'gold')
+          setUploadingReel(false)
+          setReelProgress(0)
+          e.target.reset()
+          fetch('/api/admin/reels/list').then(r=>r.ok?r.json():{reels:[]}).then(({reels})=>setReels(reels))
+        },
+      })
+      upload.findPreviousUploads().then(previous => {
+        if (previous.length) upload.resumeFromPreviousUpload(previous[0])
+        upload.start()
+      })
+    } catch (err) {
+      console.error(err)
+      showToast('Upload failed', 'red')
+      setUploadingReel(false)
+    }
+  }
+
+  async function activateReel(reel) {
+    const res = await fetch('/api/admin/reels/activate', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ reelId: reel.id }),
+    })
+    const data = await res.json()
+    if (data.success) {
+      setReels(prev => prev.map(r => r.id === reel.id ? { ...r, is_active: true } : r))
+      showToast(`"${reel.title}" activated`, 'gold')
+    } else showToast(data.error || 'Could not activate', 'red')
   }
 
   async function toggleMovieActive(movie) {
@@ -438,7 +557,7 @@ export default function AdminDashboard() {
               </div>
               <div className="card" style={{overflow:'hidden'}}>
                 <table>
-                  <thead><tr><th>Title</th><th>Year</th><th>Category</th><th>Producer</th><th>Watch hrs</th><th>Royalty</th><th>Status</th><th></th></tr></thead>
+                  <thead><tr><th>Title</th><th>Year</th><th>Category</th><th>Producer</th><th>Duration</th><th>Watch hrs</th><th>Royalty</th><th>Status</th><th></th></tr></thead>
                   <tbody>
                     {(movies||[]).filter(m => m.title?.toLowerCase().includes(movieSearch.toLowerCase())).map((m)=>(
                       <tr key={m.id}>
@@ -446,17 +565,26 @@ export default function AdminDashboard() {
                         <td>{m.year}</td>
                         <td><span style={{fontSize:11,background:'var(--bg4)',padding:'2px 8px',borderRadius:4}}>{m.category?.split(' & ')[0]}</span></td>
                         <td>{m.producer}</td>
+                        <td>
+                          {m.duration_seconds
+                            ? `${Math.floor(m.duration_seconds/60)}m`
+                            : <button className="btn btn-ghost" style={{fontSize:11,padding:'3px 8px'}} onClick={()=>syncDuration(m)}>Sync</button>}
+                        </td>
                         <td style={{color:'var(--text)'}}>{movieMinutes[m.id] ? `${(movieMinutes[m.id]/60).toFixed(1)}h` : <span style={{color:'var(--text3)'}}>0h</span>}</td>
                         <td style={{color:'var(--text3)'}} title="Populates after you run a monthly royalty calculation on the Royalties tab">Pending calc</td>
                         <td><span style={{fontSize:11,padding:'2px 8px',borderRadius:4,fontWeight:500,background:m.is_active?'rgba(74,206,138,0.12)':'rgba(90,85,80,0.2)',color:m.is_active?'var(--green)':'var(--text3)'}}>{m.is_active?'Live':'Hidden'}</span></td>
-                        <td><button className="btn btn-ghost" style={{fontSize:11,padding:'4px 10px',marginRight:6}} onClick={()=>toggleMovieActive(m)}>{m.is_active?'Hide':'Activate'}</button><button className="btn btn-ghost" style={{fontSize:11,padding:'4px 10px',color:'var(--red)'}} onClick={()=>setDeletingMovie(m)}>Delete</button></td>
+                        <td style={{whiteSpace:'nowrap'}}>
+                          <button className="btn btn-ghost" style={{fontSize:11,padding:'4px 10px',marginRight:6}} onClick={()=>setEditingMovie(m)}>Edit</button>
+                          <button className="btn btn-ghost" style={{fontSize:11,padding:'4px 10px',marginRight:6}} onClick={()=>toggleMovieActive(m)}>{m.is_active?'Hide':'Activate'}</button>
+                          <button className="btn btn-ghost" style={{fontSize:11,padding:'4px 10px',color:'var(--red)'}} onClick={()=>setDeletingMovie(m)}>Delete</button>
+                        </td>
                       </tr>
                     ))}
                     {movies === null && (
-                      <tr><td colSpan={8} style={{textAlign:'center',padding:24,color:'var(--text3)'}}>Loading…</td></tr>
+                      <tr><td colSpan={9} style={{textAlign:'center',padding:24,color:'var(--text3)'}}>Loading…</td></tr>
                     )}
                     {movies !== null && (movies||[]).filter(m => m.title?.toLowerCase().includes(movieSearch.toLowerCase())).length === 0 && (
-                      <tr><td colSpan={8} style={{textAlign:'center',padding:24,color:'var(--text3)'}}>No movies match "{movieSearch}"</td></tr>
+                      <tr><td colSpan={9} style={{textAlign:'center',padding:24,color:'var(--text3)'}}>No movies match "{movieSearch}"</td></tr>{/* colSpan updated for new Duration column */}
                     )}
                   </tbody>
                 </table>
@@ -506,6 +634,67 @@ export default function AdminDashboard() {
                 <button type="submit" className="btn btn-gold" disabled={uploading}>{uploading?`Uploading… ${uploadProgress}%`:'Upload Movie'}</button>
                 <p style={{fontSize:12,color:'var(--text3)',marginTop:10}}>Uploads go straight to Bunny.net and become visible in the app as soon as the file finishes uploading.</p>
               </form>
+            </div>
+          )}
+
+          {/* ── REELS ── */}
+          {tab==='reels' && (
+            <div>
+              <div className="card" style={{padding:'24px',marginBottom:20}}>
+                <h3 style={{fontSize:16,fontWeight:600,marginBottom:6}}>Upload a Reel</h3>
+                <p style={{fontSize:13,color:'var(--text2)',marginBottom:18}}>Short cuts from a movie — a great scene, a memorable moment. Free to watch, no subscription required, great for discovery.</p>
+                <form onSubmit={handleReelUpload}>
+                  <div style={{marginBottom:14}}>
+                    <label style={{display:'block',fontSize:11,fontWeight:600,color:'var(--text2)',marginBottom:6,textTransform:'uppercase',letterSpacing:'.07em'}}>Which Movie Is This From? *</label>
+                    <select name="movieId" className="form-input" required disabled={uploadingReel}>
+                      <option value="">Select a movie…</option>
+                      {(movies||[]).map(m=><option key={m.id} value={m.id}>{m.title} ({m.year})</option>)}
+                    </select>
+                  </div>
+                  <div style={{marginBottom:14}}>
+                    <label style={{display:'block',fontSize:11,fontWeight:600,color:'var(--text2)',marginBottom:6,textTransform:'uppercase',letterSpacing:'.07em'}}>Reel Title *</label>
+                    <input name="reelTitle" className="form-input" placeholder="e.g. The unforgettable confrontation scene" required disabled={uploadingReel} />
+                  </div>
+                  <div style={{marginBottom:20}}>
+                    <label style={{display:'block',fontSize:11,fontWeight:600,color:'var(--text2)',marginBottom:6,textTransform:'uppercase',letterSpacing:'.07em'}}>Clip File</label>
+                    <input className="form-input" name="reelFile" type="file" accept="video/*" required disabled={uploadingReel} />
+                  </div>
+                  {uploadingReel && (
+                    <div style={{marginBottom:20}}>
+                      <div style={{height:8,background:'var(--bg3)',borderRadius:4,overflow:'hidden'}}>
+                        <div style={{height:'100%',width:`${reelProgress}%`,background:'var(--gold)',transition:'width .3s'}} />
+                      </div>
+                      <div style={{fontSize:12,color:'var(--text2)',marginTop:6}}>{reelProgress}% uploaded</div>
+                    </div>
+                  )}
+                  <button type="submit" className="btn btn-gold" disabled={uploadingReel}>{uploadingReel?`Uploading… ${reelProgress}%`:'Upload Reel'}</button>
+                </form>
+              </div>
+
+              <div style={{fontWeight:600,fontSize:15,marginBottom:12}}>All Reels</div>
+              <div className="card" style={{overflow:'hidden'}}>
+                {reels === null ? (
+                  <div style={{padding:'24px',textAlign:'center',color:'var(--text3)',fontSize:13}}>Loading…</div>
+                ) : !reels.length ? (
+                  <div style={{padding:'24px',textAlign:'center',color:'var(--text3)',fontSize:13}}>No reels uploaded yet.</div>
+                ) : (
+                  <table>
+                    <thead><tr><th>Title</th><th>From Movie</th><th>Duration</th><th>Views</th><th>Status</th><th></th></tr></thead>
+                    <tbody>
+                      {reels.map(r=>(
+                        <tr key={r.id}>
+                          <td style={{color:'var(--text)',fontWeight:500}}>{r.title}</td>
+                          <td>{r.movies?.title || '—'}</td>
+                          <td>{r.duration_seconds ? `${Math.floor(r.duration_seconds/60)}:${String(r.duration_seconds%60).padStart(2,'0')}` : '—'}</td>
+                          <td>{r.view_count || 0}</td>
+                          <td><span style={{fontSize:11,padding:'2px 8px',borderRadius:4,background:r.is_active?'rgba(74,206,138,0.12)':'rgba(90,85,80,0.2)',color:r.is_active?'var(--green)':'var(--text3)'}}>{r.is_active?'Live':'Pending'}</span></td>
+                          <td>{!r.is_active && <button className="btn btn-ghost" style={{fontSize:11,padding:'4px 10px'}} onClick={()=>activateReel(r)}>Activate</button>}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                )}
+              </div>
             </div>
           )}
 
@@ -849,6 +1038,42 @@ export default function AdminDashboard() {
           )}
         </div>
       </div>
+
+      {editingMovie && (
+        <div style={{position:'fixed',inset:0,background:'rgba(0,0,0,0.7)',display:'flex',alignItems:'center',justifyContent:'center',zIndex:200,padding:20}} onClick={()=>setEditingMovie(null)}>
+          <div className="card" style={{width:'100%',maxWidth:500,padding:24,maxHeight:'85vh',overflowY:'auto'}} onClick={e=>e.stopPropagation()}>
+            <h3 style={{fontSize:16,fontWeight:600,marginBottom:16}}>Edit "{editingMovie.title}"</h3>
+            <form onSubmit={handleUpdateMovie}>
+              <div style={{marginBottom:14}}>
+                <label style={{display:'block',fontSize:11,color:'var(--text3)',marginBottom:4,textTransform:'uppercase'}}>Movie Title *</label>
+                <input name="title" className="form-input" defaultValue={editingMovie.title} required />
+              </div>
+              <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:12,marginBottom:14}}>
+                <div>
+                  <label style={{display:'block',fontSize:11,color:'var(--text3)',marginBottom:4,textTransform:'uppercase'}}>Year</label>
+                  <input name="year" type="number" className="form-input" defaultValue={editingMovie.year} />
+                </div>
+                <div>
+                  <label style={{display:'block',fontSize:11,color:'var(--text3)',marginBottom:4,textTransform:'uppercase'}}>Producer</label>
+                  <input name="producer" className="form-input" defaultValue={editingMovie.producer} />
+                </div>
+              </div>
+              <div style={{marginBottom:14}}>
+                <label style={{display:'block',fontSize:11,color:'var(--text3)',marginBottom:4,textTransform:'uppercase'}}>Category</label>
+                <input name="category" list="category-options" className="form-input" defaultValue={editingMovie.category} />
+              </div>
+              <div style={{marginBottom:20}}>
+                <label style={{display:'block',fontSize:11,color:'var(--text3)',marginBottom:4,textTransform:'uppercase'}}>Description</label>
+                <textarea name="description" className="form-input" rows={3} defaultValue={editingMovie.description} style={{resize:'vertical'}} />
+              </div>
+              <div style={{display:'flex',gap:10}}>
+                <button type="submit" className="btn btn-gold" disabled={savingMovie}>{savingMovie?'Saving…':'Save Changes'}</button>
+                <button type="button" className="btn btn-ghost" onClick={()=>setEditingMovie(null)}>Cancel</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
 
       {deletingMovie && (
         <div style={{position:'fixed',inset:0,background:'rgba(0,0,0,0.7)',display:'flex',alignItems:'center',justifyContent:'center',zIndex:200,padding:20}} onClick={()=>setDeletingMovie(null)}>

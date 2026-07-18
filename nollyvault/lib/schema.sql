@@ -171,6 +171,25 @@ alter table public.admin_activity_log enable row level security;
 -- No policies — only ever written/read via the service-role key in admin
 -- API routes, same pattern as everything else locked down this way.
 
+-- ─── MOVIE REELS (short highlight clips) ─────────────────────────────────────
+-- Short cuts from a movie — a great scene, a memorable moment — separate
+-- from the full film. Freely viewable without a subscription, since these
+-- work as a discovery/marketing hook, same as a trailer would.
+create table public.movie_reels (
+  id uuid default uuid_generate_v4() primary key,
+  movie_id uuid references public.movies(id) on delete cascade not null,
+  title text not null,
+  bunny_video_guid text,
+  duration_seconds integer,
+  view_count integer default 0,
+  is_active boolean default false,
+  created_at timestamptz default now()
+);
+alter table public.movie_reels enable row level security;
+create policy "reels_read" on public.movie_reels
+  for select using (is_active = true);
+-- Writes only via service-role in admin routes, same pattern as everywhere else.
+
 -- ─── ROW LEVEL SECURITY ───────────────────────────────────────────────────────
 -- Users can only read/write their own data.
 

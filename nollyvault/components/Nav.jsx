@@ -48,6 +48,7 @@ export default function Nav({ activeProfile, onProfileClick, onSearch }) {
     { label: 'Watchlist',     href: '/watchlist' },
     { label: 'Watch Parties', href: '/watch-party' },
     { label: '🎬 The Legends', href: '/veterans', gold: true },
+    { label: 'Reels',          href: '/reels' },
     { label: '📺 Retro Ads', href: '/retro-ads', gold: false },
     { label: 'Advertise',     href: '/advertise' },
     { label: 'Partners',      href: '/partners' },
