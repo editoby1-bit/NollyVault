@@ -66,6 +66,7 @@ export default function Landing() {
         <div style={{flex:1}}/>
         <div style={{display:'flex',gap:10,alignItems:'center'}}>
           <Link href="/veterans"><span style={{fontSize:13,color:'var(--gold)',cursor:'pointer',fontWeight:500,marginRight:4}}>🎬 The Legends</span></Link>
+          <Link href="/teasers"><button className="btn btn-outline" style={{padding:'7px 18px',fontSize:13}}>Free Teasers</button></Link>
           <Link href="/login"><button className="btn btn-outline" style={{padding:'7px 18px',fontSize:13}}>Sign In</button></Link>
           <Link href="/signup"><button className="btn btn-gold" style={{padding:'7px 18px',fontSize:13}}>Get Started</button></Link>
         </div>

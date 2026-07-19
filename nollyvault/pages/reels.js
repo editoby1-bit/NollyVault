@@ -1,24 +1,33 @@
-// pages/reels.js — Short highlight clips from movies, freely watchable
+// pages/reels.js — Short highlight clips from movies. Subscriber-only —
+// free discovery teasers live separately at /teasers via YouTube embeds.
 import { useState, useEffect } from 'react'
+import { useRouter } from 'next/router'
 import Nav from '../components/Nav'
+import { useSession, useAuthReady } from './_app'
 
 export default function Reels() {
+  const router = useRouter()
+  const session = useSession()
+  const ready = useAuthReady()
   const [reels, setReels] = useState(null)
   const [playing, setPlaying] = useState(null)
   const [streamUrl, setStreamUrl] = useState(null)
 
   useEffect(() => {
+    if (!ready) return // still resolving auth, don't redirect prematurely
+    if (!session) { router.replace('/login?redirect=/reels'); return }
     fetch('/api/reels/list')
       .then(r => r.ok ? r.json() : { reels: [] })
       .then(({ reels }) => setReels(reels || []))
       .catch(() => setReels([]))
-  }, [])
+  }, [session, ready])
 
   async function openReel(reel) {
     setPlaying(reel)
     setStreamUrl(null)
     const res = await fetch(`/api/reels/stream/${reel.id}`)
     const data = await res.json()
+    if (data.redirect) { router.replace(data.redirect); return }
     if (data.streamUrl) setStreamUrl(data.streamUrl)
   }
 
@@ -35,7 +44,7 @@ export default function Reels() {
       <Nav />
       <div style={{paddingTop:80,minHeight:'100vh',maxWidth:1200,margin:'0 auto',padding:'90px 24px 60px'}}>
         <h1 style={{fontFamily:"'Playfair Display',serif",fontSize:32,fontWeight:900,marginBottom:6}}>Reels</h1>
-        <p style={{color:'var(--text2)',fontSize:14,marginBottom:32}}>Great moments and memorable scenes, cut short. Free to watch, no subscription needed.</p>
+        <p style={{color:'var(--text2)',fontSize:14,marginBottom:32}}>Great moments and memorable scenes, cut short. Included with your subscription.</p>
 
         {reels === null ? (
           <div style={{color:'var(--text3)',textAlign:'center',padding:60}}>Loading…</div>

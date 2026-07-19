@@ -179,7 +179,8 @@ create table public.movie_reels (
   id uuid default uuid_generate_v4() primary key,
   movie_id uuid references public.movies(id) on delete cascade not null,
   title text not null,
-  bunny_video_guid text,
+  bunny_video_guid text,              -- set for paid, subscriber-only reels
+  youtube_video_id text,              -- set for free public teasers (no Bunny cost)
   duration_seconds integer,
   view_count integer default 0,
   is_active boolean default false,

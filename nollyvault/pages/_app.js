@@ -3,9 +3,10 @@ import { useRouter } from 'next/router'
 import Head from 'next/head'
 import '../styles/globals.css'
 
-export const SupabaseContext = createContext({ supabase: null, session: null })
+export const SupabaseContext = createContext({ supabase: null, session: null, ready: false })
 export const useSupabaseClient = () => useContext(SupabaseContext).supabase
 export const useSession = () => useContext(SupabaseContext).session
+export const useAuthReady = () => useContext(SupabaseContext).ready
 
 // Pages that don't require a session — everything else is treated as
 // protected. If a session unexpectedly disappears (refresh token expired or
@@ -69,7 +70,7 @@ export default function App({ Component, pageProps }) {
   )
 
   return (
-    <SupabaseContext.Provider value={{ supabase, session }}>
+    <SupabaseContext.Provider value={{ supabase, session, ready }}>
       <Head>
         <title>NaijaRewind — The Home of Classic Nollywood</title>
         <meta name="description" content="Watch the greatest Nollywood classics from the 90s and 2000s in one place. Relive the golden era." />

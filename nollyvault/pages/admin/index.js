@@ -331,6 +331,23 @@ export default function AdminDashboard() {
     } else showToast(data.error || 'Could not delete', 'red')
   }
 
+  async function handleCreateTeaser(e) {
+    e.preventDefault()
+    const fd = new FormData(e.target)
+    const res = await fetch('/api/admin/reels/create-teaser', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({
+        movieId: fd.get('movieId'), title: fd.get('teaserTitle'), youtubeVideoId: fd.get('youtubeId'),
+      }),
+    })
+    const data = await res.json()
+    if (data.success) {
+      showToast(`Teaser "${data.reel.title}" is live at /teasers`, 'gold')
+      e.target.reset()
+      fetch('/api/admin/reels/list').then(r=>r.ok?r.json():{reels:[]}).then(({reels})=>setReels(reels))
+    } else showToast(data.error || 'Could not create teaser', 'red')
+  }
+
   async function handleReelUpload(e) {
     e.preventDefault()
     const fd = new FormData(e.target)
@@ -641,8 +658,8 @@ export default function AdminDashboard() {
           {tab==='reels' && (
             <div>
               <div className="card" style={{padding:'24px',marginBottom:20}}>
-                <h3 style={{fontSize:16,fontWeight:600,marginBottom:6}}>Upload a Reel</h3>
-                <p style={{fontSize:13,color:'var(--text2)',marginBottom:18}}>Short cuts from a movie — a great scene, a memorable moment. Free to watch, no subscription required, great for discovery.</p>
+                <h3 style={{fontSize:16,fontWeight:600,marginBottom:6}}>Upload a Paid Reel (subscribers only)</h3>
+                <p style={{fontSize:13,color:'var(--text2)',marginBottom:18}}>Short cuts from a movie — hosted on Bunny, requires an active subscription to watch. Shows at /reels.</p>
                 <form onSubmit={handleReelUpload}>
                   <div style={{marginBottom:14}}>
                     <label style={{display:'block',fontSize:11,fontWeight:600,color:'var(--text2)',marginBottom:6,textTransform:'uppercase',letterSpacing:'.07em'}}>Which Movie Is This From? *</label>
@@ -668,6 +685,31 @@ export default function AdminDashboard() {
                     </div>
                   )}
                   <button type="submit" className="btn btn-gold" disabled={uploadingReel}>{uploadingReel?`Uploading… ${reelProgress}%`:'Upload Reel'}</button>
+                </form>
+              </div>
+
+              <div className="card" style={{padding:'24px',marginBottom:20,borderColor:'#5ba3d0'}}>
+                <h3 style={{fontSize:16,fontWeight:600,marginBottom:6}}>Add a Free Teaser (no login needed)</h3>
+                <p style={{fontSize:13,color:'var(--text2)',marginBottom:18}}>Uses a YouTube video you already have — no Bunny upload, goes live instantly. Shows at /teasers to hook new visitors into signing up.</p>
+                <form onSubmit={handleCreateTeaser} style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:12}}>
+                  <div style={{gridColumn:'1 / -1'}}>
+                    <label style={{display:'block',fontSize:11,fontWeight:600,color:'var(--text2)',marginBottom:6,textTransform:'uppercase'}}>Which Movie? *</label>
+                    <select name="movieId" className="form-input" required>
+                      <option value="">Select a movie…</option>
+                      {(movies||[]).map(m=><option key={m.id} value={m.id}>{m.title} ({m.year})</option>)}
+                    </select>
+                  </div>
+                  <div style={{gridColumn:'1 / -1'}}>
+                    <label style={{display:'block',fontSize:11,fontWeight:600,color:'var(--text2)',marginBottom:6,textTransform:'uppercase'}}>Teaser Title *</label>
+                    <input name="teaserTitle" className="form-input" placeholder="e.g. A taste of Karishika" required />
+                  </div>
+                  <div style={{gridColumn:'1 / -1'}}>
+                    <label style={{display:'block',fontSize:11,fontWeight:600,color:'var(--text2)',marginBottom:6,textTransform:'uppercase'}}>YouTube Video ID or URL *</label>
+                    <input name="youtubeId" className="form-input" placeholder="e.g. dQw4w9WgXcQ or full YouTube URL" required />
+                  </div>
+                  <div style={{gridColumn:'1 / -1'}}>
+                    <button type="submit" className="btn btn-gold">Add Free Teaser</button>
+                  </div>
                 </form>
               </div>
 
