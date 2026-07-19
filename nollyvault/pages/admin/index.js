@@ -601,7 +601,7 @@ export default function AdminDashboard() {
                       <tr><td colSpan={9} style={{textAlign:'center',padding:24,color:'var(--text3)'}}>Loading…</td></tr>
                     )}
                     {movies !== null && (movies||[]).filter(m => m.title?.toLowerCase().includes(movieSearch.toLowerCase())).length === 0 && (
-                      <tr><td colSpan={9} style={{textAlign:'center',padding:24,color:'var(--text3)'}}>No movies match "{movieSearch}"</td></tr>{/* colSpan updated for new Duration column */}
+                      <tr><td colSpan={9} style={{textAlign:'center',padding:24,color:'var(--text3)'}}>No movies match "{movieSearch}"</td></tr>
                     )}
                   </tbody>
                 </table>
