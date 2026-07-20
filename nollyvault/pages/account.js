@@ -106,10 +106,16 @@ export default function Account() {
             </div>
           </div>
 
-          <button className="btn btn-ghost" onClick={async()=>{await supabase.auth.signOut();router.push('/login')}}>
-            <svg viewBox="0 0 24 24" width={15} height={15} fill="currentColor"><path d="M17 7l-1.41 1.41L18.17 11H8v2h10.17l-2.58 2.58L17 17l5-5zM4 5h8V3H4c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h8v-2H4V5z"/></svg>
-            Sign Out
-          </button>
+          <div style={{display:'flex',gap:10,flexWrap:'wrap'}}>
+            <button className="btn btn-ghost" onClick={()=>router.push('/history')}>
+              <svg viewBox="0 0 24 24" width={15} height={15} fill="currentColor"><path d="M13 3a9 9 0 00-9 9H1l3.89 3.89.07.14L9 12H6a7 7 0 117 7 6.9 6.9 0 01-4.95-2.05l-1.41 1.41A9 9 0 1013 3zm-1 5v5l4.28 2.54.72-1.21-3.5-2.08V8z"/></svg>
+              Watch History
+            </button>
+            <button className="btn btn-ghost" onClick={async()=>{await supabase.auth.signOut();router.push('/login')}}>
+              <svg viewBox="0 0 24 24" width={15} height={15} fill="currentColor"><path d="M17 7l-1.41 1.41L18.17 11H8v2h10.17l-2.58 2.58L17 17l5-5zM4 5h8V3H4c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h8v-2H4V5z"/></svg>
+              Sign Out
+            </button>
+          </div>
         </div>
       </div>
     </>

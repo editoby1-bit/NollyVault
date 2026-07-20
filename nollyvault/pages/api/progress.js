@@ -38,7 +38,7 @@ export default async function handler(req, res) {
   }
 
   if (req.method === 'GET') {
-    const { profileId, movieId } = req.query
+    const { profileId, movieId, history } = req.query
 
     // Single-movie lookup, used by the watch page to resume playback
     if (movieId) {
@@ -50,6 +50,25 @@ export default async function handler(req, res) {
         .maybeSingle()
       if (error) return res.status(500).json({ error: error.message })
       return res.json({ progress: data || null })
+    }
+
+    // Full watch history — everything ever watched, completed or not.
+    // Previously nothing showed completed movies anywhere in the app at
+    // all; the old query below only ever returned in-progress ones.
+    if (history) {
+      const { data, error } = await supabase
+        .from('watch_history')
+        .select(`
+          progress_seconds,
+          completed,
+          watched_at,
+          movies (id, title, year, category, thumbnail_url, duration_seconds)
+        `)
+        .eq('profile_id', profileId)
+        .order('watched_at', { ascending: false })
+        .limit(100)
+      if (error) return res.status(500).json({ error: error.message })
+      return res.json({ history: data })
     }
 
     const { data, error } = await supabase
